@@ -58,11 +58,14 @@ Blackfly::Blackfly(
 
 // Only l1 goes to 0 upon death
 void Vector::process_death() {
-  l1 = 0;
+  l1 = 0.0;
 }
 
 void Blackfly::update_delay_index(double l1, double mf, double exposure) {
   delays[delay_index] = {l1, mf, exposure};
+  for (auto& d : delays) {
+    d.l1 = l1;
+  }
   if (delay_index + 1 >= delays.size()) {
     delay_index = 0;
   } else {
@@ -80,20 +83,18 @@ double Blackfly::calc_density_dependence_i(double mf, double exposure) {
 }
 
 void Blackfly::calc_L1(double timestep_years, double beta, double exposure, float mf) {
-  // for (int i = 0; i < l1.size(); ++i) {
   double parasite_induced_mortality = mu_v + alpha_v * mf * exposure;
   l1 = (
-    beta * 
     calc_density_dependence_i(
       mf, exposure
     ) * 
+    beta * 
     exposure * mf
   ) /
   (
     (parasite_induced_mortality) +
     v_1*std::exp(-(tou_v * timestep_years) * (mu_v + alpha_v * delays[delay_index].microfilariae * delays[delay_index].exposure))
   );
-  // }
 }
 
 void Blackfly::calc_L2(double timestep_years) {
@@ -101,13 +102,13 @@ void Blackfly::calc_L2(double timestep_years) {
   l2 = (delays[delay_index].l1 * (v_1 * std::exp(-(tou_v * timestep_years) * (parasite_induced_mortality)))) / (v_2 + mu_v);
 }
 
-void Blackfly::calc_L3(double a_H, double g, double mu_l3) {
-  l3 = (v_2 * l2) / (mu_v + mu_l3 + (a_H / g));
+void Blackfly::calc_L3(double curr_L2, double a_H, double g, double mu_l3) {
+  l3 = (v_2 * curr_L2) / (mu_v + mu_l3 + (a_H / g));
 }
 
 void Blackfly::process_death() {
   Vector::process_death();
   for (auto& triplet : delays) {
-    triplet = {0, 0, 0};
+    triplet = {0, 0, triplet.exposure};
   }
 }

@@ -56,7 +56,7 @@ class Blackfly: public Vector {
 
         void calc_L2(double timestep_years);
 
-        void calc_L3(double a_H, double g, double mu_l3);
+        void calc_L3(double curr_l2, double a_H, double g, double mu_l3);
 
         Blackfly() = default;
 

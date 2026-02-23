@@ -3,9 +3,9 @@
 #include <random>
 #include <iostream>
 
-double derivmf_one(int male_present, Worm fetile_female_worms, double mf_current, double mf_mort, double mf_move, double k_in) {
+double derivmf_one(int male_present, Worm& fetile_female_worms, double mf_current, double mf_mort, double mf_move, double k_in) {
     double new_incoming = 0.0;
-    for (long i = 1; i < fetile_female_worms.parasites.size(); ++i){
+    for (int i = 0; i < fetile_female_worms.parasites.size(); ++i){
         new_incoming += fetile_female_worms.parasites[i] * fetile_female_worms.fecundity_rate(i);
     }
 
@@ -123,61 +123,52 @@ double Worm::fecundity_rate(int compartment) {
    return mf_production_rate * F / (F + std::pow(G, -1 * age_categories[compartment]) - 1);
 }
 
-std::bernoulli_distribution Worm::fecundity_movement(std::string worm_type, double timestep_years) {
+int Worm::fecundity_movement(int num_worms, WormType worm_type, double timestep_years, std::mt19937& gen) {
     // TODO: Effects of treatment
-    if (worm_type == "fertile_female") {
-        return std::bernoulli_distribution(fertile_to_infertile_rate * timestep_years);
+    if (worm_type == WormType::Fertile_Female) {
+        std::binomial_distribution<int> dist(num_worms, fertile_to_infertile_rate * timestep_years);
+        return dist(gen);
     }
-    return std::bernoulli_distribution(infertile_to_fertile_rate * timestep_years);
+    std::binomial_distribution<int> dist(num_worms, infertile_to_fertile_rate * timestep_years);
+    return dist(gen);
 }
 
 
-std::vector<double> Worm::age(
-    std::bernoulli_distribution age_dist, std::mt19937& gen, 
-    std::string worm_type, double timestep_years, double new_worms
+void Worm::age(
+    std::mt19937& gen, WormType worm_type, double timestep_years, 
+    double new_worms, std::vector<double>* swapped_out
 ) {
 
     // double dead_worms = 0;
     // double aging_worms = 0;
+    double age_rate = timestep_years / years_per_compartment;
     std::vector<double> female_worms_swapped_out(compartments);
 
     // for females
     // determine MDA values as needed, update mortality parameters
     // calculate dead fertile, infertile, and sterile
     double incoming_worms = new_worms;
-    std::bernoulli_distribution fecundity_movement_gen = fecundity_movement(worm_type, timestep_years);
     for (int i = 0; i < compartments; ++i) {
         double mortality_rate = weibull_mortality(i, timestep_years);
-        double dead_worms = 0;
-        double aging_worms = 0;
-        for (int j = 0; j < parasites[i]; ++j) {
-            int is_dead = std::bernoulli_distribution(mortality_rate)(gen);
-            dead_worms += is_dead;
-            if (is_dead == 0) {
-                int did_age = age_dist(gen);
-                aging_worms += did_age;
-            }
-        }
-        
-        // if (dead_worms > 0) {
-        //     std::cout << "Dead: " << dead_worms << " Age " << aging_worms << "\n";
-        // }
+        std::binomial_distribution<int> worm_death_dist(parasites[i], mortality_rate);
+        double dead_worms = worm_death_dist(gen);
+        std::binomial_distribution<int> worm_age_dist(parasites[i] - dead_worms, age_rate);
+        double aging_worms = worm_age_dist(gen);
 
         double outgoing_worms_swapped = 0.0;
-        if (worm_type == "fertile_female" || worm_type == "infertile_female") {
+        if (worm_type != WormType::Male) {
             double current_alive_worms = parasites[i] - dead_worms - aging_worms;
-            for (int j = 0; j < current_alive_worms; ++j) {
-                outgoing_worms_swapped += fecundity_movement_gen(gen);
-            }
+            outgoing_worms_swapped = fecundity_movement(current_alive_worms, worm_type, timestep_years, gen);
         }
         parasites[i] += incoming_worms - dead_worms - aging_worms - outgoing_worms_swapped;
         incoming_worms = aging_worms;
-        female_worms_swapped_out[i] = outgoing_worms_swapped;
+        if (swapped_out) {
+            (*swapped_out)[i] = outgoing_worms_swapped;
+        }
     }
-    return female_worms_swapped_out;
 }
 
-void Worm::age_helper_female_swapped_worms(std::vector<double> incoming_swapped_worms) {
+void Worm::age_helper_female_swapped_worms(std::vector<double>& incoming_swapped_worms) {
     for(int i = 0; i < compartments; ++i) {
         parasites[i] += incoming_swapped_worms[i];
     }
@@ -206,23 +197,23 @@ void MF::calc_new_mf(double timestep_years, double male_worms, Worm& fertile_fem
     parasites[0] += (timestep_years / 6) * (k1 + 2 * k2 + 2 * k3 + k4);
 }
 
-void MF::age_exiting_mf(int age_category, double timestep_years) {
+void MF::age_exiting_mf(int age_category, double timestep_years, double prev_mf) {
     double mortality = weibull_mortality(age_category, 1);
     double k1 = derivmf_rest(
         mortality, mf_move_rate,
-        parasites[age_category], parasites[age_category-1], 0
+        parasites[age_category], prev_mf, 0
     );
     double k2 = derivmf_rest(
         mortality, mf_move_rate,
-        parasites[age_category], parasites[age_category-1], timestep_years * k1 / 2
+        parasites[age_category], prev_mf, timestep_years * k1 / 2
     );
     double k3 = derivmf_rest(
         mortality, mf_move_rate,
-        parasites[age_category], parasites[age_category-1], timestep_years * k2 / 2
+        parasites[age_category], prev_mf, timestep_years * k2 / 2
     );
     double k4 = derivmf_rest(
         mortality, mf_move_rate,
-        parasites[age_category], parasites[age_category-1], timestep_years * k3
+        parasites[age_category], prev_mf, timestep_years * k3
     );
 
     parasites[age_category] += (timestep_years / 6) * (k1 + 2 * k2 + 2 * k3 + k4);
@@ -231,13 +222,16 @@ void MF::age_exiting_mf(int age_category, double timestep_years) {
 void MF::age(double timestep_years, double male_worms, Worm& fertile_female_worms) {
     // if there is a male and fertile feamle
     // TODO: impact of MDA
-
+    
+    double prev_mf = parasites[0];
     // RDK4 method for calculating initial mf
     calc_new_mf(timestep_years, male_worms, fertile_female_worms);
-    
+
     // RDK4 method for calculating aging of mf > 1
     for (int i = 1; i < parasites.size(); ++i) {
-        age_exiting_mf(i, timestep_years);
+        double curr_mf = parasites[i]; 
+        age_exiting_mf(i, timestep_years, prev_mf);
+        prev_mf = curr_mf;
     }
 }
 

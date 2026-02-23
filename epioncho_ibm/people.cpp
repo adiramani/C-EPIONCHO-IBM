@@ -38,12 +38,11 @@ void People::initialize_from_params(
 )
 {
   mean_age = mean_human_age_;
-  
+  max_age = max_human_age_;
   ages.resize(population_size);
-  std::exponential_distribution<int> age_exp_dist(1 / mean_human_age_);
   gender_dist = std::bernoulli_distribution(0.5);
-  gamma_dist = std::gamma_distribution<double>(k_e, 1 / k_e);
-  death_dist = std::bernoulli_distribution((1/mean_age) * timestep_years);
+  gamma_dist = std::gamma_distribution<double>(k_e, 1.0 / k_e);
+  death_dist = std::bernoulli_distribution(1.0 / mean_age * timestep_years);
 
 
   for (auto worm_type : worm_types) {
@@ -56,8 +55,22 @@ void People::initialize_from_params(
   sex.resize(population_size);
   exposure_heterogeneity.resize(population_size);
 
+  std::vector<double> curr_age(population_size, 0);
+  for (int i = 0; i < 75000; ++i) {
+    for(int j = 0; j < population_size; ++j) {
+      curr_age[j] += timestep_years;
+    }
+    for(int j = 0; j < population_size; ++j) {
+      if (death_dist(gen) || curr_age[j] > max_age) {
+        curr_age[j] = 0;
+      }
+    }
+  }
+  ages = curr_age;
+
   for (int i = 0; i < population_size; ++i) {
-    ages[i] = std::min(age_exp_dist(gen), max_human_age_);
+    // int sampled_age = (int)age_exp_dist(gen);
+    // if (sampled_age > max_age_timesteps) sampled_age = 0;
     sex[i] = gender_dist(gen);
     exposure_heterogeneity[i] = gamma_dist(gen);
 
@@ -98,7 +111,7 @@ void People::initialize_from_params(
 std::vector<double> People::get_exposure(ExposureParams exp_param, double sex_ratio) {
   double exp_females = 1 / (sex_ratio * (exp_param.Q - 1) + 1);
   double exp_males = (exp_param.Q) * exp_females;
-  int n_females = std::count(sex.begin(), sex.end(), true);
+  int n_females = std::accumulate(sex.begin(), sex.end(), 0.0);
   int n_males = population_size - n_females;
 
   assert(n_males > 0 && n_females > 0);
@@ -134,7 +147,6 @@ std::vector<double> People::get_exposure(ExposureParams exp_param, double sex_ra
   for (double& val : age_sex_exp) {
     val /= mean_age_sex_exp;
   }
-
   return age_sex_exp;
 }
 
@@ -157,49 +169,54 @@ void People::new_established_l3(
   double ABR, std::vector<double>& exposure, double timestep_in_years
 ) {
   double mean_l3 = mean_l3_per_blackfly();
+  double total_new_worms = 0.0;
+  double avg_rate = 0.0;
   for (int i = 0; i < population_size; ++i) {
     double l3_in_rate = wplus1_rate(mean_l3, delta_h_zero, delta_h_inf, c_h, ABR, exposure[i], timestep_in_years);
     int new_l3_in = std::poisson_distribution(l3_in_rate)(gen);
-    // if (new_l3_in > 0) {
-    //   std::cout << l3[i].current_index << " New Worms " << new_l3_in << "\n";
-    // }
+    avg_rate += l3_in_rate;
+    total_new_worms += new_l3_in;
     l3[i].add_new_established_l3(new_l3_in);
   }
 }
 
-void People::age(std::mt19937 gen, double timestep_years, std::vector<double>& new_male_worms, std::vector<double>& new_female_worms) {
+void People::age(std::mt19937& gen, double timestep_years, std::vector<double>& new_male_worms, std::vector<double>& new_female_worms) {
+  int num_worm_comparments = worms[worm_types[0]][0].compartments;
+  std::vector<double> worms_to_fertile(num_worm_comparments);
+  std::vector<double> worms_to_infertile(num_worm_comparments);
+
+  auto& male_worms = worms["male"];
+  auto& fertile_female_worms = worms["fertile_female"];
+  auto& infertile_female_worms = worms["infertile_female"];
+
   for (int i = 0; i < population_size; ++i) {
-    std::vector<double> fertile_female_swapped_worms;
-    std::vector<double> infertile_female_swapped_worms;
     
-    for (auto worm_type : worm_types) {
-      double new_worms = 0.0;
-      if (worm_type == "infertile_female") {
-        new_worms = new_female_worms[i];
-      } else if (worm_type == "male") {
-        new_worms = new_male_worms[i];
-      }
-
-      double aging_rate = timestep_years / worms[worm_type][i].years_per_compartment;
-      std::vector<double> swapped_worms = worms[worm_type][i].age(
-        std::bernoulli_distribution(aging_rate),
-        gen,
-        worm_type,
-        timestep_years,
-        new_worms
-      );
-
-      if (worm_type == "infertile_female") {
-        fertile_female_swapped_worms = swapped_worms;
-      } else if (worm_type == "fertile_female") {
-        infertile_female_swapped_worms = swapped_worms;
-      }
-    }
-    worms["fertile_female"][i].age_helper_female_swapped_worms(fertile_female_swapped_worms);
-    worms["infertile_female"][i].age_helper_female_swapped_worms(infertile_female_swapped_worms);
+    male_worms[i].age(
+      gen,
+      WormType::Male,
+      timestep_years,
+      new_male_worms[i],
+      nullptr
+    );
+    infertile_female_worms[i].age(
+      gen,
+      WormType::Infertile_Female,
+      timestep_years,
+      new_female_worms[i],
+      &worms_to_fertile
+    );
+    fertile_female_worms[i].age(
+      gen,
+      WormType::Fertile_Female,
+      timestep_years,
+      0.0,
+      &worms_to_infertile
+    );
+    fertile_female_worms[i].age_helper_female_swapped_worms(worms_to_fertile);
+    infertile_female_worms[i].age_helper_female_swapped_worms(worms_to_infertile);
     microfilariae[i].age(timestep_years, worms["male"][i].get_worm_load(), worms["fertile_female"][i]);
     l3[i].age();
-    ages[i] += 1;
+    ages[i] += timestep_years;
   }
 }
 
@@ -209,6 +226,9 @@ void People::process_deaths(std::mt19937 gen) {
   int num_dead = 0;
   for (int i = 0; i < population_size; ++i) {
     bool is_dead = death_dist(gen);
+    if (ages[i] > max_age) {
+      is_dead = true;
+    }
     people_to_die[i] = is_dead;
     num_dead += is_dead;
     if (is_dead) {
@@ -225,9 +245,6 @@ void People::process_deaths(std::mt19937 gen) {
       blackflies[i].process_death();
     }
   }
-  // if (num_dead > 0) {
-  //   std::cout << "Dead: " << num_dead << "\n";
-  // }
 }
 
 std::vector<double> People::get_new_worms() {
@@ -236,6 +253,22 @@ std::vector<double> People::get_new_worms() {
     new_worms[i] = l3[i].get_new_worms();
   }
   return new_worms;
+}
+
+double People::mean_l1_per_blackfly() {
+  double total_l1 = 0.0;
+  for(int i = 0; i < population_size; ++i) {
+    total_l1 += blackflies[i].l1;
+  }
+  return total_l1 / population_size;
+}
+
+double People::mean_l2_per_blackfly() {
+  double total_l2 = 0.0;
+  for(int i = 0; i < population_size; ++i) {
+    total_l2 += blackflies[i].l2;
+  }
+  return total_l2 / population_size;
 }
 
 double People::mean_l3_per_blackfly() {

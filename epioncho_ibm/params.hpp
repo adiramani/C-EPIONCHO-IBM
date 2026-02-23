@@ -102,7 +102,7 @@ struct WormParams {
     double lambda_zero = 0.33;
     double sex_ratio = 0.5;
     double epsilon = 1.158305; // mf production per worm
-    double l3_delay = 10.0 * 30;  // months, assuming 30 days per month
+    double l3_delay = 10.0 * 28;  // months, assuming 30 days per month
 };
 
 // -------------------- Blackfly Parameters --------------------

@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <random>
+#include "enums.hpp"
 
 class Parasite {
     public:
@@ -62,15 +63,15 @@ class Worm: public Parasite {
 
         double fecundity_rate(int compartment);
 
-        std::bernoulli_distribution fecundity_movement(std::string worm_type, double timestep_years);
+        int fecundity_movement(int num_worms, WormType worm_type, double timestep_years, std::mt19937& gen);
 
-        std::vector<double> age(
-            std::bernoulli_distribution age_dist, std::mt19937& gen, 
-            std::string worm_type, double timestep_years, double new_worms
+        void age(
+            std::mt19937& gen, WormType worm_type, double timestep_years, double new_worms,
+            std::vector<double>* swapped_out
         );
 
         void age_helper_female_swapped_worms(
-            std::vector<double> incoming_swapped_worms
+            std::vector<double>& incoming_swapped_worms
         );
 };
 
@@ -90,7 +91,7 @@ class MF: public Parasite {
 
         void calc_new_mf(double timestep_in_years, double male_worms, Worm& fertile_female_worms);
 
-        void age_exiting_mf(int age_category, double timestep_years);
+        void age_exiting_mf(int age_category, double timestep_years, double prev_mf);
 
         void age(double timestep_years, double male_worms, Worm& fertile_female_worms);
 
