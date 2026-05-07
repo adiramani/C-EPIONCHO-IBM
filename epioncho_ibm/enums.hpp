@@ -11,6 +11,7 @@ enum class InterventionType {
 };
 
 enum class ModelOutputTypes {
+    population_size,
     mf_prevalence,
     ov16_seroprevalence,
     mf_intensity,

@@ -24,7 +24,7 @@ public:
 
     explicit Model(const InputParams& input_params);
 
-    void advance_timestep();
+    void advance_timestep(bool verbose);
 
     InputParams params_from_json(const std::string& path);
 };

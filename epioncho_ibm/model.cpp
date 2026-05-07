@@ -47,7 +47,7 @@ std::vector<Intervention*> get_active_interventions(
     return result;
 }
 
-void Model::advance_timestep() {
+void Model::advance_timestep(bool verbose) {
     clock_t overall_start = clock();
     clock_t start = overall_start;
 
@@ -167,8 +167,9 @@ void Model::advance_timestep() {
     
     overall_time += get_elapsed_time(overall_start);
 
-    // TODO: only run if debug flag set
-    _print_yearly_stats(current_timestep, current_year, num_vc_year, num_mda_year);
+    if (verbose) {
+        _print_yearly_stats(current_timestep, current_year, num_vc_year, num_mda_year);
+    }
 
     state.current_timestep += (int)state.params.base.delta_time_days;
 }

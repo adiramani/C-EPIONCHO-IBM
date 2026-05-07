@@ -268,30 +268,39 @@ struct InputParams {
 struct OutputInfo {
     std::vector<ModelOutputTypes> outputs_to_track;
     std::vector<double> output_time_years;
+    std::vector<double> pretty_time_years; // in case users want to label time t = 0 as 1900, etc.
+    
     int start_age = 0;
     int end_age = 80;
+    int year_label_start = 0;
 
     OutputInfo(
-        double end_time_years, double interval_years = 1,
+        double end_time_years, double start_time_years = 0,
+        double interval_years = 1,
         int start_age = 0, int end_age = 80,
+        int year_label_start = 0,
         std::vector<ModelOutputTypes> outputs_to_track = {ModelOutputTypes::mf_prevalence, ModelOutputTypes::ov16_seroprevalence}
     )
     : outputs_to_track(outputs_to_track),
-      start_age(start_age), end_age(end_age)
+      start_age(start_age), end_age(end_age),
+      year_label_start(year_label_start)
     {
-        for (int t = 0; t < end_time_years; t += interval_years) {
+        for (int t = start_time_years; t < end_time_years; t += interval_years) {
             output_time_years.push_back(t);
+            pretty_time_years.push_back(year_label_start + t);
         }
     }
 
     OutputInfo(
         std::vector<double> output_time_years,
         int start_age = 0, int end_age = 80,
+        int year_label_start = 0,
         std::vector<ModelOutputTypes> outputs_to_track = {ModelOutputTypes::mf_prevalence, ModelOutputTypes::ov16_seroprevalence}
     )
     : outputs_to_track(outputs_to_track),
       output_time_years(output_time_years),
-      start_age(start_age), end_age(end_age)
+      start_age(start_age), end_age(end_age),
+      year_label_start(year_label_start)
     {}
 };
 

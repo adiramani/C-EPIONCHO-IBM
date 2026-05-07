@@ -7,12 +7,20 @@ static double get_elapsed_time(clock_t start_time) {
     return (double)(clock() - start_time) / CLOCKS_PER_SEC;
 }
 
-int main() {
+// TODO: possibly use cxxopts for parsing params
+int main(int argc, char* argv[]) {
+    bool verbose = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--verbose") {
+            verbose = true;
+        }
+    }
+
     int total_years = 100;
     clock_t start = clock();
     Params parameters;
     parameters.base.seed = 1;
-    parameters.base.n_people = 500;
+    parameters.base.n_people = 400;
     parameters.blackfly.bite_rate_per_person_per_year = 1000;
 
     VectorControlParams vcp = VectorControlParams(
@@ -38,24 +46,23 @@ int main() {
     Model model(input_params);
 
     OutputInfo oi = OutputInfo(
-        total_years, 1,
+        total_years, 0, 1,
         0, 80,
-        {ModelOutputTypes::mf_intensity, ModelOutputTypes::mf_prevalence}
+        1900,
+        {ModelOutputTypes::mf_intensity, ModelOutputTypes::mf_prevalence, ModelOutputTypes::population_size}
     );
 
     ModelOutputs mo = ModelOutputs(oi);
 
     const int timesteps = 365 * total_years;
     for (int i = 0; i < timesteps; ++i) {
-        if (model.state.current_timestep == 0 || model.state.current_timestep == (mo.output_info.output_time_years[mo.output_index] / model.state.timestep_years) - 1) {
+        if (mo.should_update(model.state.current_timestep, model.state.timestep_years)) {
             mo.update(model.state);
         }
-        model.advance_timestep();
+        model.advance_timestep(verbose);
     }
 
-    // for (auto i: mo.outputs)
-    //     std::cout << i << ' ';
-    mo.write("/Users/adi/Documents/Github Repos/C-EPIONCHO-IBM/test_output.csv");
+    mo.write("test_output.csv");
 
     printf("Model runtime: %f\n", model.overall_time);
     printf("Total runtime: %f\n", get_elapsed_time(start));
