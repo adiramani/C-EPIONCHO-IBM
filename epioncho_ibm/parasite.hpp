@@ -1,121 +1,153 @@
-#ifndef WORM_HPP
-#define WORM_HPP
+#ifndef PARASITE_HPP
+#define PARASITE_HPP
 
 #include <vector>
-#include <string>
 #include <random>
-#include "enums.hpp"
+#include "params.hpp"
 
-class Parasite {
-    public:
-        int compartments; // c_max
-        float years_per_compartment; // q_W | q_M
+class ParasitePopulation {
+public:
+    int n_people = 0;
+    int compartments = 0;
+    float years_per_compartment = 0.0f;
+    float y_mortality_rate = 0.0f;
+    float d_mortality_rate = 0.0f;
 
-        float y_mortality_rate_by_age; // y_W | w_M
-        float d_mortality_rate_by_age; // d_W | d_M
+    // Stores all n_people × compartments values in a single flat vector:
+    //   parasites[person * compartments + compartment]
+    std::vector<double> parasites;
 
-        std::vector<double> parasites;
-        std::vector<double> age_categories;
+    // Shared age-category lookup (same for every person)
+    std::vector<double> age_categories;  // [compartments]
 
-        Parasite() = default;
+    ParasitePopulation() = default;
+    ParasitePopulation(
+        int n_people_,
+        int compartments_,
+        float years_per_compartment_,
+        float y_mortality_rate_,
+        float d_mortality_rate_,
+        double initial_value
+    );
 
-        Parasite(
-            int compartments_,
-            float years_per_compartment_,
-            float y_mortality_rate_by_age_,
-            float d_mortality_rate_by_age_,
-            int initial_parasites_
-        );
+    // Convenience indexed accessors
+    inline double& at(int person, int c) {
+        return parasites[person * compartments + c];
+    }
+    inline double at(int person, int c) const {
+        return parasites[person * compartments + c];
+    }
 
-        double get_parasite_load();
+    double weibull_mortality(int c, double timestep_years) const;
 
-        void process_death();
+    // Zero all compartments for one person (on birth/death)
+    void process_death(int person_idx);
 
-        double weibull_mortality(int compartment, double timestep_years);
+    double get_raw_load(int person_idx) const;
+
+    void get_all_raw_loads(std::vector<double>& out) const;
 };
 
-class Worm: public Parasite {
-    public:
-        float mf_production_rate; // ε*
-        float infertile_to_fertile_rate; // ω
-        float fertile_to_infertile_rate; // λ0
-        float F;
-        float G;
-    
-        Worm() = default;
 
-        Worm(
-            int compartments_,
-            float years_per_compartment_,
-            float y_mortality_rate_by_age_,
-            float d_mortality_rate_by_age_,
-            int initial_parasites_,
-            float mf_production_rate_,
-            float infertile_to_fertile_rate_,
-            float fertile_to_infertile_rate_,
-            float F_,
-            float G_
-        );
+class WormPopulation : public ParasitePopulation {
+public:
+    float mf_production_rate = 0.0f;  // epsilon
+    float infertile_to_fertile_rate = 0.0f;  // omega
+    float fertile_to_infertile_rate = 0.0f;  // lambda_zero
+    float F = 0.0f;
+    float G = 0.0f;
 
-        double get_worm_load() {
-            return get_parasite_load();
-        }
+    WormPopulation() = default;
+    WormPopulation(int n_people_, const WormParams& params, int initial_worms);
 
-        double fecundity_rate(int compartment);
+    double fecundity_rate(int c) const;
 
-        int fecundity_movement(int num_worms, WormType worm_type, double timestep_years, std::mt19937& gen);
+    // Returns how many worms transition between fertile/infertile states
+    int fecundity_movement(
+        double alive_worms,
+        double treatment_induced_temp_sterility,
+        std::mt19937& gen
+    ) const;
 
-        void age(
-            std::mt19937& gen, WormType worm_type, double timestep_years, double new_worms,
-            std::vector<double>* swapped_out
-        );
+    // Ages every person in one pass.
+    // new_worms[i] = newly established L3 entering person i this timestep
+    // swapped_out = if non-null, size must be n_people * compartments;
+    // filled with per-person per-compartment counts that
+    // switch state (fertile↔infertile)
+    void age(
+        std::mt19937& gen,
+        WormType type,
+        double current_timestep,
+        double timestep_years,
+        const std::vector<double>& new_worms,
+        std::vector<double>* swapped_out,
+        DrugParams* drug_params,
+        std::vector<int>& number_of_treatments,
+        std::vector<int>& time_of_last_treatment
+    );
 
-        void age_helper_female_swapped_worms(
-            std::vector<double>& incoming_swapped_worms
-        );
+    // Add incoming worms that switched from the complementary population
+    void age_helper_swapped_worms(const std::vector<double>& incoming);
 };
 
-class MF: public Parasite {
-    public:
-        MF() = default;
-        double mf_move_rate;
+class MFPopulation : public ParasitePopulation {
+public:
+    double mf_move_rate = 0.0;
+    double kmf_const;
+    bool use_kmf_const;
+    double initial_kmf;
+    double slope_kmf;
 
-        MF(
-            int compartments_,
-            float years_per_compartment_,
-            float y_mortality_rate_by_age_,
-            float d_mortality_rate_by_age_,
-            double mf_move_rate_,
-            int initial_parasites_
-        );
+    MFPopulation() = default;
+    MFPopulation(int n_people_, const MicrofilariaeParams& params, double initial_mf);
 
-        void calc_new_mf(double timestep_in_years, double male_worms, Worm& fertile_female_worms);
+    void age(
+        int current_timestep,
+        double timestep_years,
+        const WormPopulation& male_worms,
+        const WormPopulation& fertile_female_worms,
+        DrugParams* drug_params,
+        std::vector<int>& number_of_treatments,
+        std::vector<int>& time_of_last_treatment
+    );
 
-        void age_exiting_mf(int age_category, double timestep_years, double prev_mf);
+    double get_skin_snip_load_person(std::mt19937& gen, int person_idx, int skin_snip_weight, int num_skin_snips);
 
-        void age(double timestep_years, double male_worms, Worm& fertile_female_worms);
+private:
+    void calc_new_mf_for_person(
+        int person,
+        double timestep_years,
+        double treatment_microfilaricidal_effect,
+        double male_load,
+        const WormPopulation& ff_worms
+    );
 
-        double get_mf_load() {
-            return get_parasite_load();
-        };
+    void age_exiting_mf_for_person(int person, int c, double timestep_years, double prev_mf, double treatment_microfilaricidal_effect);
 };
 
-class L3: public Parasite {
-    public:
-        int current_index;
+class L3Population {
+public:
+    int n_people = 0;
+    int compartments = 0;
+    int current_index = 0;
 
-        L3() = default;
+    // index = person * compartments + slot
+    std::vector<double> parasites;
 
-        L3(
-            int compartments,
-            float years_per_compartment
-        );
+    L3Population() = default;
+    L3Population(int n_people_, int compartments_);
 
-        void age();
+    // Advance the shared circular index (call once per timestep)
+    void age_all();
 
-        double get_new_worms();
+    // Read (and zero) the worms ready to establish this timestep for one person
+    double get_new_worms(int person_idx);
 
-        void add_new_established_l3(int num_l3);
+    // Write newly established L3 into the current delay slot for one person
+    void add_new_established_l3(int person_idx, int num_l3);
+
+    // Zero the entire delay buffer for one person (on death)
+    void process_death(int person_idx);
 };
 
 #endif

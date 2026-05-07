@@ -4,64 +4,123 @@
 #include "parasite.hpp"
 #include "vector.hpp"
 #include "params.hpp"
-#include <cstddef>
-#include <map>
 #include <vector>
-#include <string>
 #include <random>
 
 class People {
-    private:
-        const std::vector<std::string> worm_types = {"fertile_female", "infertile_female", "sterilized_female", "male"};
-    public:
-        int population_size;
-        double mean_age;
-        double max_age;
-        std::gamma_distribution<double> gamma_dist;
-        std::bernoulli_distribution gender_dist;
-        std::bernoulli_distribution death_dist;
+public:
+    int population_size = 0;
+    double mean_age = 0.0;
+    double max_age = 0.0;
+    double _current_rho = -1;
+    double _current_cov = -1;
 
-        std::vector<double> ages;
-        std::vector<bool> sex; // 0 = male, 1 = female
-        std::vector<double> exposure_heterogeneity;
-        std::vector<bool> ov16_serostatus;
-        std::vector<bool> ov16_serostatus_finite_seroreversion;
+    std::gamma_distribution<double> gamma_dist;
+    std::bernoulli_distribution gender_dist;
+    std::bernoulli_distribution death_dist;
+    std::uniform_real_distribution<double> uniform_dist;
 
-        std::vector<L3> l3;
-        std::map<std::string, std::vector<Worm>> worms;
-        std::vector<MF> microfilariae;
-        std::vector<Blackfly> blackflies;
-        
-        People(int population_size_);
+    // Tracking status in population
+    std::vector<double> ages;
+    std::vector<bool> sex; // false=male, true=female
+    std::vector<double> exposure_heterogeneity;
+    std::vector<bool> ov16_serostatus;
+    std::vector<bool> ov16_serostatus_finite_seroreversion;
+    std::vector<int> number_of_treatments;
+    std::vector<int> time_of_last_treatment;
+    std::vector<double> compliance;
 
-        void initialize_from_params(
-            std::mt19937& gen,
-            double timestep_years,
-            int mean_human_age_,
-            int max_human_age_,
-            double k_e,
-            WormParams worm_params,
-            MicrofilariaeParams mf_params,
-            BlackflyParams blackfly_params
-        );
+    // Population objects — one per parasite type
+    WormPopulation fertile_female_worms;
+    WormPopulation infertile_female_worms;
+    WormPopulation sterilized_female_worms;
+    WormPopulation male_worms;
+    MFPopulation microfilariae;
+    L3Population l3;
+    BlackflyPopulation blackflies;
 
-        std::vector<double> get_exposure(ExposureParams exp_param, double sex_ratio);
+    // Other useful structs to be tracked
+    std::optional<TreatmentParams> treatment_params = std::nullopt;
+    std::vector<double> sens_spec_random_gen;
 
-        std::vector<double> get_new_worms();
+    // Buffers — allocated once, reused every call to age().
+    // Size = population_size * worm_compartments.
+    std::vector<double> temp_to_fertile;
+    std::vector<double> temp_to_infertile;
+    // Vector of zeros for the fertile-female new_worms argument (no direct L3 input)
+    std::vector<double> temp_zeros;
+    // Temporary storage buffer for MF loads (populated before blackfly update)
+    std::vector<double> temp_mf_loads;
 
-        double mean_l1_per_blackfly();
+    explicit People(int population_size_);
 
-        double mean_l2_per_blackfly();
+    void initialize_from_params(
+        std::mt19937& gen,
+        double timestep_years,
+        int mean_human_age,
+        int max_human_age,
+        double k_e,
+        const WormParams& worm_params,
+        const MicrofilariaeParams& mf_params,
+        const BlackflyParams& blackfly_params
+    );
 
-        double mean_l3_per_blackfly();
+    // Calculates (or updates) the compliance values for each individual based on the
+    // total population and the correlation coefficient, rho.
+    double calculate_individual_compliance(std::mt19937& gen);
+    void calculate_population_compliance(std::mt19937& gen, double rho, double total_population_coverage, double proportion_never_treated);
+    void update_compliance(std::mt19937& gen, double rho, double total_population_coverage);
+    void apply_treatment_round(std::mt19937& gen, int minimum_age_of_treatment, int current_time_step);
 
-        double wplus1_rate(double mean_l3, double delta_h_zero, double delta_h_inf, double c_h, double ABR, double exposure, double timestep_in_years);
+    // Returns exposure values for every person (age- and sex-weighted,
+    // heterogeneity-normalised).
+    std::vector<double> get_exposure(
+        const ExposureParams& exp_param,
+        double sex_ratio
+    ) const;
 
-        void new_established_l3(std::mt19937& gen, double delta_h_zero, double delta_h_inf, double c_h, double ABR, std::vector<double>& exposure, double timestep_in_years);
+    // Drains the L3 delay buffer for every person and returns newly
+    // established worms ready to be sex-split this timestep.
+    std::vector<double> get_new_worms();
 
-        void age(std::mt19937& gen, double timestep_years, std::vector<double>& new_male_worms, std::vector<double>& new_female_worms);
+    // Convenience wrappers for mean blackfly larval loads
+    double mean_l1_per_blackfly() const;
+    double mean_l2_per_blackfly() const;
+    double mean_l3_per_blackfly() const;
 
-        void process_deaths(std::mt19937 gen);
+    // Returns the mean-L3 value used by wplus1_rate
+    double mean_l3_in_blackfly() const;
+
+    double wplus1_rate(
+        double mean_l3, double delta_h_zero, double delta_h_inf,
+        double c_h, double ABR, double exposure,
+        double timestep_years
+    ) const;
+
+    // Samples new L3 arrivals from a Poisson distribution and adds them
+    // to the L3 delay buffer for each person.
+    void new_established_l3(
+        std::mt19937& gen,
+        double delta_h_zero,
+        double delta_h_inf,
+        double c_h,
+        double ABR,
+        const std::vector<double>& exposure,
+        double timestep_years
+    );
+
+    void age(
+        std::mt19937& gen,
+        double current_timestep, double timestep_years,
+        const std::vector<double>& new_male_worms,
+        const std::vector<double>& new_female_worms
+    );
+
+    // Processes deaths: Resets all parasite
+    // counts and resamples demographic attributes for dead individuals.
+    void process_deaths(std::mt19937& gen);
+
+    std::vector<int> get_sub_population(int age_start, int age_end);
 };
 
 #endif

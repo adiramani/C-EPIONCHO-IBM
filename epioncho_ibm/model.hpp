@@ -2,12 +2,16 @@
 #define MODEL_HPP
 
 #include "state.hpp"
-#include <memory>
 
 class Model {
+private:
+    void _print_yearly_stats(int current_timestep, double current_year, int num_vc_year, int num_mda_year);
 public:
-    // std::unique_ptr<State> state;
     State state;
+    std::vector<std::unique_ptr<Treatment>> treatments;
+    std::vector<std::unique_ptr<VectorControl>> vector_control;
+
+    // Per-phase timing accumulators (wall-clock seconds)
     double overall_time = 0.0;
     double get_new_worms_time = 0.0;
     double worm_sex_time = 0.0;
@@ -18,11 +22,11 @@ public:
     double calc_outputs_time = 0.0;
     double print_time = 0.0;
 
-    Model(const InputParams& input_params);
+    explicit Model(const InputParams& input_params);
 
-    // Advance timestep function
     void advance_timestep();
 
+    InputParams params_from_json(const std::string& path);
 };
 
 #endif

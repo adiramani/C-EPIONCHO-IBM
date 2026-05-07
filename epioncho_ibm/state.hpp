@@ -10,24 +10,26 @@
 class State {
 public:
     std::mt19937 generator;
-
     int current_timestep = 0;
-    double timestep_years;
-
-    People people;
-    std::vector<std::unique_ptr<Treatment>> treatments;
-    std::vector<std::unique_ptr<VectorControl>> vector_control;
+    double current_year = 0;
     Params params;
+    double timestep_years = 0.0;
+    People people;
+    std::vector<Intervention*> current_interventions;
+    
 
-    State(const InputParams& input_params);
+    State(const State&) = delete;
+    State& operator=(const State&) = delete;
+    State(State&&) = default;
+    State& operator = (State&&) = default;
 
-    // // Deleted copy constructor and assignment to avoid accidental copies
-    // State(const State&) = delete;
-    // State& operator=(const State&) = delete;
+    explicit State(const Params& params);
 
-    // // Move constructor and assignment
-    // State(State&&) = default;
-    // State& operator=(State&&) = default;
+    std::vector<int> get_sub_population(int age_start, int age_end);
+
+    double mf_intensity(std::vector<int> filtered_individuals, int incubation_time_hours = 24);
+
+    double mf_prevalence(std::vector<int> filtered_individuals, int incubation_time_hours = 24);
 };
 
 #endif

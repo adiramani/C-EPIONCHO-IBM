@@ -1,114 +1,122 @@
 #include "vector.hpp"
-#include <vector>
+#include <cmath>
 #include <numeric>
-#include <iostream>
+#include <algorithm>
 
-Vector::Vector(
-  double delta_v0_,
-  double c_v_,
-  double v_1_,
-  double v_2_,
-  double mu_v_,
-  double alpha_v_,
-  double tou_v_,
-  double init_l1,
-  double init_l2,
-  double init_l3
-)
-  : delta_v0(delta_v0_),
-    c_v(c_v_),
+VectorPopulation::VectorPopulation(
+    int n_people_,
+    double v_1_,
+    double v_2_,
+    double mu_v_,
+    double init_L1,
+    double init_L2,
+    double init_L3
+) :     
+    n_people(n_people_),
     v_1(v_1_),
     v_2(v_2_),
     mu_v(mu_v_),
-    alpha_v(alpha_v_),
-    tou_v(tou_v_),
-    l1(init_l1),
-    l2(init_l2),
-    l3(init_l3)
+    l1(n_people_, init_L1),
+    l2(n_people_, init_L2),
+    l3(n_people_, init_L3)
 {}
 
-Blackfly::Blackfly(
-  double delta_v0_,
-  double c_v_,
-  double v_1_,
-  double v_2_,
-  double mu_v_,
-  double alpha_v_,
-  double tou_v_,
-  double init_l1,
-  double init_l2,
-  double init_l3,
-  double init_exposure_heterogeneity
-)
-  : Vector(
-      delta_v0_,
-      c_v_,
-      v_1_,
-      v_2_,
-      mu_v_,
-      alpha_v_,
-      tou_v_,
-      init_l1,
-      init_l2,
-      init_l3
+
+BlackflyPopulation::BlackflyPopulation(
+    int n_people_,
+    const BlackflyParams& params,
+    const std::vector<double>& exposure_heterogeneity
+) : 
+    VectorPopulation(
+        n_people_,
+        params.l1_l2_per_larva_per_year,
+        params.l2_l3_per_larva_per_year,
+        params.blackfly_mort_per_fly_per_year,
+        params.initial_L1,
+        params.initial_L2,
+        params.initial_L3
     ),
-    delays(tou_v_, {init_l1, 0.0, init_exposure_heterogeneity}),
-    delay_index(0)
-{}
-
-// Only l1 goes to 0 upon death
-void Vector::process_death() {
-  l1 = 0.0;
+    delay_size((int)params.l1_delay),
+    delay_index(n_people_, 0),
+    delay_l1(n_people_ * (int)params.l1_delay, params.initial_L1),
+    delay_mf(n_people_ * (int)params.l1_delay, 0.0),
+    delay_exposure(n_people_ * (int)params.l1_delay, 0.0),
+    delta_v0(params.delta_v0),
+    c_v(params.c_v),
+    alpha_v(params.blackfly_mort_from_mf_per_fly_per_year),
+    tou_v(params.l1_delay)
+{
+    // Set the exposure heterogeneity to the initial value
+    for (int p = 0; p < n_people_; ++p) {
+        for (int s = 0; s < delay_size; ++s)
+            delay_exposure[p * delay_size + s] = exposure_heterogeneity[p];
+    }
 }
 
-void Blackfly::update_delay_index(double l1, double mf, double exposure) {
-  delays[delay_index] = {l1, mf, exposure};
-  for (auto& d : delays) {
-    d.l1 = l1;
-  }
-  if (delay_index + 1 >= delays.size()) {
-    delay_index = 0;
-  } else {
-    delay_index += 1;
-  }
+void BlackflyPopulation::process_death(int person_idx) {
+    l1[person_idx] = 0.0;
+    // l2 and l3 are not reset on death in the original model
+    const int base = person_idx * delay_size;
+    for (int s = 0; s < delay_size; ++s) {
+        delay_l1[base + s] = 0.0;
+        delay_mf[base + s] = 0.0;
+        // exposure delay is preserved, as it is just individual heterogeneity
+    }
 }
 
-double Blackfly::calc_density_dependence_i(double mf, double exposure) {
-  return(
-    delta_v0 /
-    (
-      1 + (c_v * mf * exposure)
-    )
-  );
+void BlackflyPopulation::update_all(
+    double timestep_years,
+    double beta,
+    const std::vector<double>& exposure_vals,
+    const std::vector<double>& mf_loads,
+    double a_H,
+    double gonotrophic_cycle_length,
+    double mu_l3
+) {
+    for (int p = 0; p < n_people; ++p) {
+        const int person_loc_flat = p * delay_size;
+        const int delay_loc = delay_index[p];
+        const double mf = mf_loads[p];
+        const double exp = exposure_vals[p];
+
+        // ---------- calc_L1 ----------
+        const double pim = mu_v + alpha_v * mf * exp;
+        const double density_dep = delta_v0 / (1.0 + c_v * mf * exp);
+        const double delay_pim = mu_v + alpha_v * delay_mf[person_loc_flat + delay_loc] * delay_exposure[person_loc_flat + delay_loc];
+        const double new_l1 = (density_dep * beta * exp * mf)
+                            / (pim + v_1 * std::exp(-(tou_v * timestep_years) * delay_pim));
+
+        // ---------- calc_L2 (uses delay slot values before overwrite) ----------
+        const double new_l2 = (delay_l1[person_loc_flat + delay_loc]
+                               * v_1 * std::exp(-(tou_v * timestep_years) * delay_pim))
+                            / (v_2 + mu_v);
+
+        // ---------- calc_L3 (uses old l2 before this timestep's update) ----------
+        const double new_l3 = (v_2 * l2[p])
+                            / (mu_v + mu_l3 + (a_H / gonotrophic_cycle_length));
+
+
+        l1[p] = new_l1;
+        l2[p] = new_l2;
+        l3[p] = new_l3;
+
+        delay_l1[person_loc_flat + delay_loc] = new_l1;
+        delay_mf[person_loc_flat + delay_loc] = mf;
+        delay_exposure[person_loc_flat + delay_loc] = exp;
+
+        for (int s = 0; s < delay_size; ++s)
+            delay_l1[person_loc_flat + s] = new_l1;
+
+        delay_index[p] = (delay_loc + 1 >= delay_size) ? 0 : delay_loc + 1;
+    }
 }
 
-void Blackfly::calc_L1(double timestep_years, double beta, double exposure, float mf) {
-  double parasite_induced_mortality = mu_v + alpha_v * mf * exposure;
-  l1 = (
-    calc_density_dependence_i(
-      mf, exposure
-    ) * 
-    beta * 
-    exposure * mf
-  ) /
-  (
-    (parasite_induced_mortality) +
-    v_1*std::exp(-(tou_v * timestep_years) * (mu_v + alpha_v * delays[delay_index].microfilariae * delays[delay_index].exposure))
-  );
+double VectorPopulation::mean_l1() const {
+    return std::accumulate(l1.begin(), l1.end(), 0.0) / n_people;
 }
-
-void Blackfly::calc_L2(double timestep_years) {
-  double parasite_induced_mortality = mu_v + alpha_v * delays[delay_index].microfilariae * delays[delay_index].exposure;
-  l2 = (delays[delay_index].l1 * (v_1 * std::exp(-(tou_v * timestep_years) * (parasite_induced_mortality)))) / (v_2 + mu_v);
+double VectorPopulation::mean_l2() const {
+    return std::accumulate(l2.begin(), l2.end(), 0.0) / n_people;
 }
-
-void Blackfly::calc_L3(double curr_L2, double a_H, double g, double mu_l3) {
-  l3 = (v_2 * curr_L2) / (mu_v + mu_l3 + (a_H / g));
-}
-
-void Blackfly::process_death() {
-  Vector::process_death();
-  for (auto& triplet : delays) {
-    triplet = {0, 0, triplet.exposure};
-  }
+double VectorPopulation::mean_l3() const {
+    return std::accumulate(l3.begin(), l3.end(), 0.0) / n_people;
 }

@@ -2,79 +2,75 @@
 #define VECTOR_HPP
 
 #include <vector>
+#include "params.hpp"
 
-class Vector {
-    public:
-        double l1;
-        double l2;
-        double l3;
+class VectorPopulation {
+public:
+    int n_people = 0;
 
-        double delta_v0;
-        double c_v; // Severity of density-dependent 
-        double v_1; // per capita development rate from L1 to L2
-        double v_2; // per capita development rate from L2 to L3
-        double mu_v; // per-capita mortality rate of blackflies
-        double alpha_v; // per-capita mf induced mortality of blackflies
-        double tou_v; // delay before L1 transition to L2
+    double v_1 = 0.0;  // L1→L2 per-capita development rate
+    double v_2 = 0.0;  // L2→L3 per-capita development rate
+    double mu_v = 0.0;  // blackfly per-capita mortality
 
-        Vector() = default;
+    // length = population size
+    std::vector<double> l1;
+    std::vector<double> l2;
+    std::vector<double> l3;
 
-        Vector(
-            double delta_v0_,
-            double c_v_,
-            double v_1_,
-            double v_2_,
-            double mu_v_,
-            double alpha_v_,
-            double tou_v_,
-            double init_l1,
-            double init_l2,
-            double init_l3
-        );
+    VectorPopulation() = default;
+    
+    VectorPopulation(
+        int n_people_,
+        double v_1_,
+        double v_2_,
+        double mu_v_,
+        double init_L1,
+        double init_L2,
+        double init_L3
+    );
 
-        virtual void process_death();
+    double mean_l1() const;
+    double mean_l2() const;
+    double mean_l3() const;
 };
 
-class Blackfly: public Vector {
-    public:
+class BlackflyPopulation : public VectorPopulation {
+public:
+    int delay_size = 0;  // l1_delay from BlackflyParams
 
-        struct Delay {
-            double l1;
-            double microfilariae;
-            double exposure;
-        };
+    // Per-person delay buffer position
+    std::vector<int> delay_index;
 
-        int delay_index;
-        // [(l1 delay, mf delay, exposure delay), (...), ...]
-        std::vector<Delay> delays;
+    // Flat delay buffers: [person * delay_size + slot]
+    std::vector<double> delay_l1;
+    std::vector<double> delay_mf;
+    std::vector<double> delay_exposure;
 
-        void update_delay_index(double l1, double mf, double exposure);
+    // Shared blackfly parameters
+    double delta_v0 = 0.0;  // density dependence baseline
+    double c_v = 0.0;  // density dependence severity
+    double alpha_v = 0.0;  // mf-induced blackfly mortality
+    double tou_v = 0.0;  // L1 delay duration
 
-        double calc_density_dependence_i(double mf, double exposure);
+    BlackflyPopulation() = default;
 
-        void calc_L1(double timestep_years, double beta, double exposure, float mf);
+    BlackflyPopulation(
+        int n_people_,
+        const BlackflyParams& params,
+        const std::vector<double>& exposure_heterogeneity
+    );
 
-        void calc_L2(double timestep_years);
+    void process_death(int person_idx);
 
-        void calc_L3(double curr_l2, double a_H, double g, double mu_l3);
-
-        Blackfly() = default;
-
-        Blackfly(
-            double delta_v0_,
-            double c_v_,
-            double v_1_,
-            double v_2_,
-            double mu_v_,
-            double alpha_v_,
-            double tou_v_,
-            double init_l1,
-            double init_l2,
-            double init_l3,
-            double init_exposure_heterogeneity
-        );
-
-        void process_death() override;
+    void update_all(
+        double timestep_years,
+        double beta,
+        const std::vector<double>& exposure_vals,
+        const std::vector<double>& mf_loads,
+        double a_H,
+        double gonotrophic_cycle_length,
+        double mu_l3
+    );
 };
 
 #endif

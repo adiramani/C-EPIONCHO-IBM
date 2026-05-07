@@ -4,87 +4,152 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <stdexcept>
+#include <format>
+#include "enums.hpp"
 
 // -------------------- Treatment Parameters --------------------
 
 struct InterventionParams {
+    // Inclusive of start time, but not end time
     int start_time = 0;
-    int end_time = 0;
+    int end_time = 1;
     int interval_years = 1;
+    bool pre_converted_timesteps = false;
     std::string intervention_name = "";
-    std::string intervention_type = "";
-    std::vector<int> application_timesteps;
+    InterventionType intervention_type;
+    std::vector<int> application_times;
 
-    InterventionParams(int start, int end, int interval,
-                       const std::string& name = "",
-                       const std::string& type = "")
-        : start_time(start), end_time(end), interval_years(interval),
-          intervention_name(name), intervention_type(type)
+    InterventionParams(
+        int start, int end, int interval_years,
+        const std::string& name,
+        InterventionType type
+    ) 
+    : start_time(start), end_time(end), interval_years(interval_years),
+      intervention_name(name), intervention_type(type)
     {
-        calculate_application_timesteps();
+        calculate_application_times();
     }
 
-    void calculate_application_timesteps() {
-        application_timesteps.clear();
+    InterventionParams(
+        std::vector<int> application_times,
+        bool pre_converted_timesteps,
+        const std::string& name,
+        InterventionType type
+    ) 
+    : pre_converted_timesteps(pre_converted_timesteps),
+      intervention_name(name), intervention_type(type),
+      application_times(application_times)
+    {}
+
+    void calculate_application_times() {
+        application_times.clear();
         if (interval_years <= 0 || end_time < start_time) return;
 
-        for (int t = start_time; t <= end_time; t += interval_years) {
-            application_timesteps.push_back(t);
+        for (int t = start_time; t < end_time; t += interval_years) {
+            application_times.push_back(t);
         }
     }
 };
 
-struct TreatmentParams : public InterventionParams {
-    double microfilaricidal_nu = 0.0096;
-    double microfilaricidal_omega = 1.25;
+struct DrugParams {
+    double microfilaricidal_upsilon = 0.0096;
+    double microfilaricidal_kappa = 1.25;
     double embryostatic_lambda_max = 32.4;
     double embryostatic_phi = 19.6;
     double permanent_infertility = 0.345;
+};
+
+struct TreatmentParams : public InterventionParams {
+    DrugParams drug_params;
     int min_age_of_treatment = 5;
-    double correlation = 0.3;
+    double rho = 0.3;
     double total_population_coverage = 0.65;
+    double proportion_never_treated = 0.0;
 
-    TreatmentParams();
-
-        TreatmentParams(
-        int start, int end, int interval,
-        std::string intervention_name,
-        std::string intervention_type,
-        double nu = 0.0096,
-        double omega = 1.25,
-        double lambda_max = 32.4,
-        double phi = 19.6,
-        double perm_infertility = 0.345,
+    TreatmentParams(
+        int start, int end, int interval_years,
+        std::string intervention_name = "IVM",
+        DrugParams drug_params = {},
         int min_age = 5,
-        double corr = 0.3,
+        double rho = 0.3,
+        double proportion_never_treated = 0.0,
         double coverage = 0.65
     )
-    : InterventionParams(start, end, interval, "", ""),
-      microfilaricidal_nu(nu),
-      microfilaricidal_omega(omega),
-      embryostatic_lambda_max(lambda_max),
-      embryostatic_phi(phi),
-      permanent_infertility(perm_infertility),
+    : InterventionParams(start, end, interval_years, intervention_name, InterventionType::MDA),
+      drug_params(drug_params),
       min_age_of_treatment(min_age),
-      correlation(corr),
-      total_population_coverage(coverage)
+      rho(rho),
+      total_population_coverage(coverage),
+      proportion_never_treated(proportion_never_treated)
+    {}
+
+    TreatmentParams(
+        std::vector<int> application_times,
+        bool pre_converted_timesteps,
+        std::string intervention_name = "IVM",
+        DrugParams drug_params = {},
+        int min_age = 5,
+        double rho = 0.3,
+        double proportion_never_treated = 0.0,
+        double coverage = 0.65
+    )
+    : InterventionParams(application_times, pre_converted_timesteps, intervention_name, InterventionType::MDA),
+      drug_params(drug_params),
+      min_age_of_treatment(min_age),
+      rho(rho),
+      total_population_coverage(coverage),
+      proportion_never_treated(proportion_never_treated)
     {}
 };
 
 struct VectorControlParams: public InterventionParams {
-    double efficacy = 0;
-    int bounce_back_timesteps = 1;
+    std::vector<double> efficacies;
 
-    VectorControlParams();
     VectorControlParams(
-        int start, int end, int interval,
-        std::string intervention_name,
-        std::string intervention_type,
-        double efficacy, int bounce_back_timesteps
+        int start, int end, int interval_years,
+        double efficacy, int bounce_back_intervals = 0,
+        std::string intervention_name = ""
     )
-    : InterventionParams(start, end, interval, "", ""),
-      efficacy(efficacy),
-      bounce_back_timesteps(bounce_back_timesteps)
+    : InterventionParams(
+        start, end + 1 + (bounce_back_intervals * interval_years), interval_years,
+        intervention_name, InterventionType::VectorControl
+      )
+    {
+        for (std::size_t t = 0; t < application_times.size(); ++t)
+            efficacies.push_back(efficacy);
+    }
+
+    VectorControlParams(
+        int start, int end, int interval_years,
+        std::vector<double> efficacy, int bounce_back_intervals = 0,
+        std::string intervention_name = ""
+    )
+    : InterventionParams(
+        start, end + (bounce_back_intervals * interval_years), interval_years,
+        intervention_name, InterventionType::VectorControl
+      ),
+      efficacies(efficacy)
+    {
+        if (efficacies.size() != application_times.size()) {
+            throw std::invalid_argument(
+                "Efficacy size must match application_times size."
+            );
+        }
+    }
+
+    VectorControlParams(
+        std::vector<int> application_times,
+        bool pre_converted_timesteps,
+        std::vector<double> efficacy,
+        std::string intervention_name = ""
+    )
+    : InterventionParams(
+        application_times,
+        pre_converted_timesteps,
+        intervention_name, InterventionType::VectorControl
+      ),
+      efficacies(efficacy)
     {}
 };
 
@@ -102,7 +167,7 @@ struct WormParams {
     double lambda_zero = 0.33;
     double sex_ratio = 0.5;
     double epsilon = 1.158305; // mf production per worm
-    double l3_delay = 10.0 * 28;  // months, assuming 30 days per month
+    double l3_delay = 10.0 * 28;  // days, assuming 28 days per month
 };
 
 // -------------------- Blackfly Parameters --------------------
@@ -137,8 +202,9 @@ struct MicrofilariaeParams {
     double y_m = 1.089;
     double d_m = 1.428;
     double kmf_const = 15;
-    // double slope_kmf = 0.0478;
-    // double initial_kmf = 0.313;
+    bool use_kmf_const = true;
+    double slope_kmf = 0.0478;
+    double initial_kmf = 0.313;
 };
 
 // -------------------- Exposure Parameters --------------------
@@ -183,11 +249,50 @@ struct Params {
 };
 
 struct InputParams {
-    // std::vector<TreatmentParams> treatments;
-    // std::vector<VectorControlParams> vector_control;
     Params params;
+    std::vector<TreatmentParams> treatments;
+    std::vector<VectorControlParams> vector_control;
 
-    InputParams() = default;
+    InputParams(
+        Params params, 
+        std::vector<TreatmentParams> treatments = {},
+        std::vector<VectorControlParams> vector_control = {}
+    )
+    : params(params),
+      treatments(treatments),
+      vector_control(vector_control)
+    {}
+};
+
+// --------------- Output Struct ----------------------------
+struct OutputInfo {
+    std::vector<ModelOutputTypes> outputs_to_track;
+    std::vector<double> output_time_years;
+    int start_age = 0;
+    int end_age = 80;
+
+    OutputInfo(
+        double end_time_years, double interval_years = 1,
+        int start_age = 0, int end_age = 80,
+        std::vector<ModelOutputTypes> outputs_to_track = {ModelOutputTypes::mf_prevalence, ModelOutputTypes::ov16_seroprevalence}
+    )
+    : outputs_to_track(outputs_to_track),
+      start_age(start_age), end_age(end_age)
+    {
+        for (int t = 0; t < end_time_years; t += interval_years) {
+            output_time_years.push_back(t);
+        }
+    }
+
+    OutputInfo(
+        std::vector<double> output_time_years,
+        int start_age = 0, int end_age = 80,
+        std::vector<ModelOutputTypes> outputs_to_track = {ModelOutputTypes::mf_prevalence, ModelOutputTypes::ov16_seroprevalence}
+    )
+    : outputs_to_track(outputs_to_track),
+      output_time_years(output_time_years),
+      start_age(start_age), end_age(end_age)
+    {}
 };
 
 #endif
