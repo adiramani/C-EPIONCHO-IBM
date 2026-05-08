@@ -2,6 +2,7 @@
 #include <iostream>
 #include <numeric>
 #include <ctime>
+#include <fstream>
 
 Model::Model(const InputParams& input_params)
     : state(input_params.params)
@@ -23,10 +24,6 @@ Model::Model(const InputParams& input_params)
               << "\n";
     
 }
-
-// InputParams Model::params_from_json(const std::string& path) {
-    
-// }
 
 static double get_elapsed_time(clock_t start_time) {
     return (double)(clock() - start_time) / CLOCKS_PER_SEC;
@@ -50,6 +47,8 @@ std::vector<Intervention*> get_active_interventions(
 void Model::advance_timestep(bool verbose) {
     clock_t overall_start = clock();
     clock_t start = overall_start;
+    
+    state.people.generate_random_vals_for_diagnostic(state.generator);
 
     int current_timestep = state.current_timestep;
 
@@ -160,6 +159,11 @@ void Model::advance_timestep(bool verbose) {
         state.params.blackfly.gonotrophic_cycle_length,
         state.params.blackfly.mu_L3);
     update_blackfly_time += get_elapsed_time(start);
+
+    state.people.update_all_status(
+        state.generator, state.timestep_years, state.params.base.year_length_days, 
+        state.params.human.skin_snip_weight, state.params.human.skin_snip_number
+    );
 
     start = clock();
     state.people.process_deaths(state.generator);

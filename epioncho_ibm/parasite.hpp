@@ -140,13 +140,13 @@ public:
     // Advance the shared circular index (call once per timestep)
     void age_all();
 
-    // Read (and zero) the worms ready to establish this timestep for one person
+    double get_raw_load(int person_idx);
+
     double get_new_worms(int person_idx);
 
     // Write newly established L3 into the current delay slot for one person
     void add_new_established_l3(int person_idx, int num_l3);
 
-    // Zero the entire delay buffer for one person (on death)
     void process_death(int person_idx);
 };
 

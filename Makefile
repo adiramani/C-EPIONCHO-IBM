@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -O3 -march=native
+CXXFLAGS = -std=c++17 -O3 -march=native -ljsoncpp
 DEBUG_FLAGS = -std=c++17 -g -Wall -Wextra
 
 SRC = $(wildcard epioncho_ibm/*.cpp)

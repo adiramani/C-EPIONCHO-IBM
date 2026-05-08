@@ -8,8 +8,62 @@
 #include <format>
 #include "enums.hpp"
 
-// -------------------- Treatment Parameters --------------------
+// -------------------- Sequelae Parameters --------------------
+struct SequelaeProbabilities {
+    // Daily probabilities
+    double severe_itch = 0.1636701;
+    double countdown_si = 3;
+    double reactive_skin_disease = 0.04163095;
+    double countdown_rsd = 3;
 
+    // Yearly probabilities, need to be recalculated using age
+    double atrophy = 0.036;
+    double avg_age_atr = 22.876;
+    double hanging_groin = 0.018;
+    double avg_age_hg = 22.876;
+    double depigmentation = 0.059;
+    double avg_age_depig = 22.876;
+
+    SequelaeProbabilities() = default;
+
+    double get_probability(SequelaeType sequelae_type) const {
+        switch (sequelae_type) {
+            case SequelaeType::SevereItch: return severe_itch;
+            case SequelaeType::ReactiveSkinDisease: return reactive_skin_disease;
+            case SequelaeType::Atrophy: return atrophy;
+            case SequelaeType::HangingGroin: return hanging_groin;
+            case SequelaeType::Depigmentation: return depigmentation;
+            default: return 0;
+        }
+    }
+
+    SequelaeProbTimeUnit get_timescale(SequelaeType sequelae_type) const {
+        switch (sequelae_type) {
+            case SequelaeType::SevereItch: return SequelaeProbTimeUnit::Day;
+            case SequelaeType::ReactiveSkinDisease: return SequelaeProbTimeUnit::Day;
+            default: return SequelaeProbTimeUnit::Year;
+        }
+    }
+
+    int get_countdown(SequelaeType sequelae_type) const {
+        switch (sequelae_type) {
+            case SequelaeType::SevereItch: return countdown_si;
+            case SequelaeType::ReactiveSkinDisease: return countdown_rsd;
+            default: return -1;
+        }
+    }
+
+    double get_avg_age(SequelaeType sequelae_type) const {
+        switch (sequelae_type) {
+            case SequelaeType::Atrophy: return avg_age_atr;
+            case SequelaeType::HangingGroin: return avg_age_hg;
+            case SequelaeType::Depigmentation: return avg_age_depig;
+            default: return -1;
+        }
+    }
+};
+
+// -------------------- Treatment Parameters --------------------
 struct InterventionParams {
     // Inclusive of start time, but not end time
     int start_time = 0;
@@ -222,6 +276,7 @@ struct HumanParams {
     int skin_snip_weight = 2;
     int skin_snip_number = 2;
     double gender_ratio = 0.5;
+    double prop_serorevert_fast = 0.5;
 };
 
 // -------------------- Base Parameters --------------------
@@ -233,7 +288,7 @@ struct BaseParams {
     double delta_time_days = 1.0;
     double year_length_days = 365.0;
     double month_length_days = 28.0;
-    std::vector<int> sequela_active;  // placeholder for SequelaType
+    std::vector<SequelaeType> sequela_active = {};
 };
 
 // -------------------- Top-level Params Struct --------------------
@@ -244,6 +299,7 @@ struct Params {
     MicrofilariaeParams mf;
     ExposureParams exposure;
     HumanParams human;
+    SequelaeProbabilities sequelae_probs;
 
     Params() = default;
 };
@@ -266,7 +322,7 @@ struct InputParams {
 
 // --------------- Output Struct ----------------------------
 struct OutputInfo {
-    std::vector<ModelOutputTypes> outputs_to_track;
+    std::vector<ModelOutputOption> outputs_to_track;
     std::vector<double> output_time_years;
     std::vector<double> pretty_time_years; // in case users want to label time t = 0 as 1900, etc.
     
@@ -279,7 +335,7 @@ struct OutputInfo {
         double interval_years = 1,
         int start_age = 0, int end_age = 80,
         int year_label_start = 0,
-        std::vector<ModelOutputTypes> outputs_to_track = {ModelOutputTypes::mf_prevalence, ModelOutputTypes::ov16_seroprevalence}
+        std::vector<ModelOutputOption> outputs_to_track = {ModelOutputOption::mf_prevalence, ModelOutputOption::adjusted_ov16_seroprevalence}
     )
     : outputs_to_track(outputs_to_track),
       start_age(start_age), end_age(end_age),
@@ -295,7 +351,7 @@ struct OutputInfo {
         std::vector<double> output_time_years,
         int start_age = 0, int end_age = 80,
         int year_label_start = 0,
-        std::vector<ModelOutputTypes> outputs_to_track = {ModelOutputTypes::mf_prevalence, ModelOutputTypes::ov16_seroprevalence}
+        std::vector<ModelOutputOption> outputs_to_track = {ModelOutputOption::mf_prevalence, ModelOutputOption::adjusted_ov16_seroprevalence}
     )
     : outputs_to_track(outputs_to_track),
       output_time_years(output_time_years),

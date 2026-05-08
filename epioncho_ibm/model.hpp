@@ -2,6 +2,7 @@
 #define MODEL_HPP
 
 #include "state.hpp"
+#include <json/json.h>
 
 class Model {
 private:

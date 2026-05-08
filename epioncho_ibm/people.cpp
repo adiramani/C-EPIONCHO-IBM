@@ -21,30 +21,35 @@ People::People(int population_size_)
 void People::initialize_from_params(
     std::mt19937& gen,
     double timestep_years,
-    int mean_human_age,
-    int max_human_age,
     double k_e,
+    const HumanParams& human_params,
     const WormParams& worm_params,
     const MicrofilariaeParams& mf_params,
-    const BlackflyParams& blackfly_params
+    const BlackflyParams& blackfly_params,
+    const SequelaeProbabilities& sequelae_params,
+    const std::vector<SequelaeType>& sequelae_active
 )
 {
-    mean_age = mean_human_age;
-    max_age = max_human_age;
+    mean_age = human_params.mean_human_age;
+    max_age = human_params.max_human_age;
+    gender_ratio = human_params.gender_ratio;
+    prop_serorevert_fast = human_params.prop_serorevert_fast;
 
     gender_dist = std::bernoulli_distribution(0.5);
     gamma_dist = std::gamma_distribution<double>(k_e, 1.0 / k_e);
     death_dist = std::bernoulli_distribution(1.0 / mean_age * timestep_years);
+    serorevert_fast_dist = std::bernoulli_distribution(prop_serorevert_fast);
     uniform_dist = std::uniform_real_distribution(0.0, 1.0);
 
     ages.resize(population_size);
     sex.resize(population_size);
     exposure_heterogeneity.resize(population_size);
     ov16_serostatus.resize(population_size, false);
-    ov16_serostatus_finite_seroreversion.resize(population_size, false);
     number_of_treatments.resize(population_size, 0);
     time_of_last_treatment.resize(population_size, -1);
     compliance.resize(population_size, 0);
+    diagnostic_random_vals_for_timestep.resize(population_size, 1);
+    serorevert_fast.resize(population_size, false);
 
     // Age burn-in
     std::vector<double> curr_age(population_size, 0.0);
@@ -57,10 +62,11 @@ void People::initialize_from_params(
     }
     ages = curr_age;
 
-    // set sex and exposure heterogeneity
+    // set sex, serorevert fast, and exposure heterogeneity
     for (int i = 0; i < population_size; ++i) {
         sex[i] = gender_dist(gen);
         exposure_heterogeneity[i] = gamma_dist(gen);
+        serorevert_fast[i] = serorevert_fast_dist(gen);
     }
 
     // All four worm types share the same compartment structure, movement between them differ
@@ -81,6 +87,31 @@ void People::initialize_from_params(
     temp_to_infertile.assign(population_size * worm_comps, 0.0);
     temp_zeros.assign(population_size, 0.0);
     temp_mf_loads.assign(population_size, 0.0);
+
+    // Initialize Sequelae
+    int num_sequelae = sequelae_active.size();
+    std::vector<double> sequelae_probabilities(num_sequelae);
+    std::vector<SequelaeProbTimeUnit> sequelae_timescales(num_sequelae);
+    std::vector<int> sequelae_countdowns(num_sequelae);
+    std::vector<double> sequelae_avg_ages(num_sequelae);
+
+    for (int s = 0; s < num_sequelae; ++s) {
+        sequelae_probabilities[s] = sequelae_params.get_probability(sequelae_active[s]);
+        sequelae_timescales[s] = sequelae_params.get_timescale(sequelae_active[s]);
+        sequelae_countdowns[s] = sequelae_params.get_countdown(sequelae_active[s]);
+        sequelae_avg_ages[s] = sequelae_params.get_avg_age(sequelae_active[s]);
+    }
+    sequelae = Sequelae(
+        sequelae_active, population_size,
+        sequelae_probabilities, sequelae_timescales,
+        sequelae_countdowns, sequelae_avg_ages
+    );
+}
+
+void People::generate_random_vals_for_diagnostic(std::mt19937& gen) {
+    for (size_t ind = 0; ind < population_size; ++ind) {
+        diagnostic_random_vals_for_timestep[ind] = uniform_dist(gen);
+    }
 }
 
 double People::calculate_individual_compliance(std::mt19937& gen) {
@@ -229,6 +260,62 @@ void People::new_established_l3(
     }
 }
 
+void People::update_ov16_status_individual(int indiv_index) {
+    bool has_male_worm = male_worms.get_raw_load(indiv_index) > 0;
+    bool has_fertile_female_worm = fertile_female_worms.get_raw_load(indiv_index) > 0;
+    bool has_infertile_female_worm = infertile_female_worms.get_raw_load(indiv_index) > 0;
+    bool has_any_mf = microfilariae.get_raw_load(indiv_index) > 0;
+    bool has_any_l3 = l3.get_raw_load(indiv_index) > 0;
+
+    bool seropositive = (has_male_worm && has_fertile_female_worm) && has_any_mf;
+    bool slow_seroreversion = !has_male_worm && !has_fertile_female_worm && !has_infertile_female_worm && !has_any_l3;
+    bool fast_seroreversion = !has_male_worm || !has_fertile_female_worm || !has_any_mf;
+    bool seroreversion_condition_to_use = serorevert_fast[indiv_index] ? fast_seroreversion : slow_seroreversion;
+
+    ov16_serostatus[indiv_index] = !ov16_serostatus[indiv_index] ? seropositive : ov16_serostatus[indiv_index];
+
+    ov16_serostatus[indiv_index] = ov16_serostatus[indiv_index] ? !seroreversion_condition_to_use : ov16_serostatus[indiv_index];
+}
+
+void People::update_all_sequelae_individual(
+    std::mt19937& generator, int indiv_index,
+    double timestep_years, int days_in_year,
+    int skin_snip_weight, int num_skin_snips
+) {
+    sequelae.update_all_sequelae_indiv(
+        generator, uniform_dist,
+        indiv_index, timestep_years, days_in_year,
+        ages[indiv_index], microfilariae.get_raw_load(indiv_index), 
+        microfilariae.get_skin_snip_load_person(
+            generator, indiv_index, skin_snip_weight, num_skin_snips
+        )
+    );
+}
+
+void People::update_all_status(
+    std::mt19937& generator,
+    double timestep_years, int days_in_year,
+    int skin_snip_weight, int num_skin_snips
+) {
+    for (int i = 0; i < population_size; ++i) {
+        update_ov16_status_individual(i);
+        update_all_sequelae_individual(
+            generator, i, timestep_years,
+            days_in_year, skin_snip_weight,
+            num_skin_snips
+        );
+    }
+
+}
+
+bool People::sample_serostatus_individual(int indiv_index, double sens, double spec) {
+    return (
+        ov16_serostatus[indiv_index] ?
+        diagnostic_random_vals_for_timestep[indiv_index] <= sens :
+        diagnostic_random_vals_for_timestep[indiv_index] > spec
+    );
+}
+
 void People::age(
     std::mt19937& gen, 
     double current_timestep, double timestep_years,
@@ -287,6 +374,7 @@ void People::process_deaths(std::mt19937& gen) {
         ages[i] = 0.0;
         sex[i] = gender_dist(gen);
         exposure_heterogeneity[i] = gamma_dist(gen);
+        ov16_serostatus[i] = false;
 
         // Reset any treatment_values
         if (_current_rho != -1 && _current_cov != -1) {
@@ -303,6 +391,7 @@ void People::process_deaths(std::mt19937& gen) {
         microfilariae.process_death(i);
         l3.process_death(i);
         blackflies.process_death(i);
+        sequelae.process_death(i);
     }
 }
 

@@ -22,6 +22,7 @@ int main(int argc, char* argv[]) {
     parameters.base.seed = 1;
     parameters.base.n_people = 400;
     parameters.blackfly.bite_rate_per_person_per_year = 1000;
+    parameters.base.sequela_active = {SequelaeType::Atrophy};
 
     VectorControlParams vcp = VectorControlParams(
         total_years - 40, total_years - 29, 1,
@@ -47,9 +48,16 @@ int main(int argc, char* argv[]) {
 
     OutputInfo oi = OutputInfo(
         total_years, 0, 1,
-        0, 80,
+        5, 80,
         1900,
-        {ModelOutputTypes::mf_intensity, ModelOutputTypes::mf_prevalence, ModelOutputTypes::population_size}
+        {
+            ModelOutputOption::mf_intensity, 
+            ModelOutputOption::mf_prevalence, 
+            ModelOutputOption::population_size, 
+            ModelOutputOption::atrophy_prevalence,
+            ModelOutputOption::true_ov16_seroprevalence,
+            ModelOutputOption::adjusted_ov16_seroprevalence
+        }
     );
 
     ModelOutputs mo = ModelOutputs(oi);

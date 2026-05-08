@@ -32,14 +32,18 @@ double ParasitePopulation::weibull_mortality(int c, double timestep_years) const
 
 void ParasitePopulation::process_death(int person_idx) {
     int base = person_idx * compartments;
-    std::fill(parasites.begin() + base,
-              parasites.begin() + base + compartments, 0.0);
+    std::fill(
+        parasites.begin() + base,
+        parasites.begin() + base + compartments, 0.0
+    );
 }
 
 double ParasitePopulation::get_raw_load(int person_idx) const {
     int base = person_idx * compartments;
-    return std::accumulate(parasites.begin() + base,
-                           parasites.begin() + base + compartments, 0.0);
+    return std::accumulate(
+        parasites.begin() + base,
+        parasites.begin() + base + compartments, 0.0
+    );
 }
 
 void ParasitePopulation::get_all_raw_loads(std::vector<double>& out) const {
@@ -347,12 +351,22 @@ double L3Population::get_new_worms(int person_idx) {
     return val;
 }
 
+double L3Population::get_raw_load(int person_idx) {
+    int base = person_idx * compartments;
+    return std::accumulate(
+        parasites.begin() + base,
+        parasites.begin() + base + compartments, 0.0
+    );
+}
+
 void L3Population::add_new_established_l3(int person_idx, int num_l3) {
     parasites[person_idx * compartments + current_index] = (double)num_l3;
 }
 
 void L3Population::process_death(int person_idx) {
     int base = person_idx * compartments;
-    std::fill(parasites.begin() + base,
-              parasites.begin() + base + compartments, 0.0);
+    std::fill(
+        parasites.begin() + base,
+        parasites.begin() + base + compartments, 0.0
+    );
 }

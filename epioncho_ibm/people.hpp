@@ -4,6 +4,7 @@
 #include "parasite.hpp"
 #include "vector.hpp"
 #include "params.hpp"
+#include "sequelae.hpp"
 #include <vector>
 #include <random>
 
@@ -12,12 +13,15 @@ public:
     int population_size = 0;
     double mean_age = 0.0;
     double max_age = 0.0;
+    double gender_ratio = 0.5;
+    double prop_serorevert_fast = 0.5;
     double _current_rho = -1;
     double _current_cov = -1;
 
     std::gamma_distribution<double> gamma_dist;
     std::bernoulli_distribution gender_dist;
     std::bernoulli_distribution death_dist;
+    std::bernoulli_distribution serorevert_fast_dist;
     std::uniform_real_distribution<double> uniform_dist;
 
     // Tracking status in population
@@ -25,10 +29,10 @@ public:
     std::vector<bool> sex; // false=male, true=female
     std::vector<double> exposure_heterogeneity;
     std::vector<bool> ov16_serostatus;
-    std::vector<bool> ov16_serostatus_finite_seroreversion;
     std::vector<int> number_of_treatments;
     std::vector<int> time_of_last_treatment;
     std::vector<double> compliance;
+    std::vector<bool> serorevert_fast;
 
     // Population objects — one per parasite type
     WormPopulation fertile_female_worms;
@@ -38,10 +42,11 @@ public:
     MFPopulation microfilariae;
     L3Population l3;
     BlackflyPopulation blackflies;
+    Sequelae sequelae;
 
     // Other useful structs to be tracked
     std::optional<TreatmentParams> treatment_params = std::nullopt;
-    std::vector<double> sens_spec_random_gen;
+    std::vector<double> diagnostic_random_vals_for_timestep;
 
     // Buffers — allocated once, reused every call to age().
     // Size = population_size * worm_compartments.
@@ -57,13 +62,16 @@ public:
     void initialize_from_params(
         std::mt19937& gen,
         double timestep_years,
-        int mean_human_age,
-        int max_human_age,
         double k_e,
+        const HumanParams& human_params,
         const WormParams& worm_params,
         const MicrofilariaeParams& mf_params,
-        const BlackflyParams& blackfly_params
+        const BlackflyParams& blackfly_params,
+        const SequelaeProbabilities& sequelae_params,
+        const std::vector<SequelaeType>& sequelae_active
     );
+
+    void generate_random_vals_for_diagnostic(std::mt19937& gen);
 
     // Calculates (or updates) the compliance values for each individual based on the
     // total population and the correlation coefficient, rho.
@@ -108,6 +116,22 @@ public:
         const std::vector<double>& exposure,
         double timestep_years
     );
+
+    void update_ov16_status_individual(int indiv_index);
+
+    void update_all_sequelae_individual(
+        std::mt19937& generator, int indiv_index,
+        double timestep_years, int days_in_year,
+        int skin_snip_weight, int num_skin_snips
+    );
+
+    void update_all_status(
+        std::mt19937& generator,
+        double timestep_years, int days_in_year,
+        int skin_snip_weight, int num_skin_snips
+    );
+
+    bool sample_serostatus_individual(int indiv_index, double sens, double spec);
 
     void age(
         std::mt19937& gen,

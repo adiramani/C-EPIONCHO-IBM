@@ -10,10 +10,27 @@ enum class InterventionType {
     MDA
 };
 
-enum class ModelOutputTypes {
+enum class SequelaeType {
+    SevereItch,
+    ReactiveSkinDisease,
+    Atrophy,
+    HangingGroin,
+    Depigmentation,
+    Blindness,
+    // VisualImpairment, Just calculated as 1.2x Blindness prevalence
+    OAE
+};
+
+enum class SequelaeProbTimeUnit {
+    Year,
+    Day
+};
+
+enum class ModelOutputOption {
     population_size,
     mf_prevalence,
-    ov16_seroprevalence,
+    true_ov16_seroprevalence,
+    adjusted_ov16_seroprevalence,
     mf_intensity,
     worm_load,
     female_worm_load,
@@ -21,5 +38,13 @@ enum class ModelOutputTypes {
     fertile_female_worm_load,
     infertile_female_worm_load,
     perm_sterile_female_worm_load,
-    compliance_percent
+    compliance_percent,
+    severe_itch_prevalence,
+    rsd_prevalence,
+    atrophy_prevalence,
+    hanging_groin_prevalence,
+    depigmentation_prevalence,
+    blindness_prevalence,
+    visual_impairment_prevalence,
+    oae_prevalence
 };
