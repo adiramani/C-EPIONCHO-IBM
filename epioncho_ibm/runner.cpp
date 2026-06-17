@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
     double k_E = 0.3;
     // double seed = 1;
     double abr = 1000;
-    double repeats = 10;
+    int repeats = 10;
     int total_years = 100;
     std::string output_folder = "";
     bool enable_timing = false;
@@ -23,20 +23,25 @@ int main(int argc, char* argv[]) {
         if (std::string(argv[i]) == "--verbose") {
             verbose = true;
         } else if (std::string(argv[i]) == "--kE") {
-            k_E = atof(argv[i+1]);
-            i++;
+            if (i + 1 >= argc)
+                return 1;
+            k_E = atof(argv[++i]);
         } else if (std::string(argv[i]) == "--abr") {
-            abr = atoi(argv[i+1]);
-            i++;
+            if (i + 1 >= argc)
+                return 1;
+            abr = atoi(argv[++i]);
         } else if (std::string(argv[i]) == "--repeats") {
-            repeats = atoi(argv[i+1]);
-            i++;
+            if (i + 1 >= argc)
+                return 1;
+            repeats = atoi(argv[++i]);
         } else if (std::string(argv[i]) == "--output-folder") {
-            output_folder = std::string(argv[i+1]);
-            i++;
+            if (i + 1 >= argc)
+                return 1;
+            output_folder = std::string(argv[++i]);
         } else if (std::string(argv[i]) == "--total-years") {
-            total_years = atoi(argv[i+1]);
-            i++;
+            if (i + 1 >= argc)
+                return 1;
+            total_years = atoi(argv[++i]);
         } else if (std::string(argv[i]) == "--enable-timing") {
             enable_timing = true;
         }
@@ -44,7 +49,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Starting Simulations for kE: " << k_E << " ABR: " << abr << "\n";
     std::vector<ModelOutputs> final_model_outputs;
     clock_t overall_start = clock();
-#pragma omp parallel for
+#pragma omp parallel for num_threads(11)
     for (int seed = 1; seed <= repeats; ++seed) {
         clock_t start = clock();
         Params parameters;
@@ -102,7 +107,7 @@ int main(int argc, char* argv[]) {
             0.65
         );
 
-        std::vector<TreatmentParams> treatments = {tp_aIVM};
+        std::vector<TreatmentParams> treatments = {tp_bIVM};
 
         InputParams input_params(
             std::move(parameters), 
