@@ -26,8 +26,7 @@ void People::initialize_from_params(
     const WormParams& worm_params,
     const MicrofilariaeParams& mf_params,
     const BlackflyParams& blackfly_params,
-    const SequelaeProbabilities& sequelae_params,
-    const std::vector<SequelaeType>& sequelae_active
+    const std::vector<std::unique_ptr<SequelaeParams>>& sequelae_params
 )
 {
     mean_age = human_params.mean_human_age;
@@ -89,23 +88,77 @@ void People::initialize_from_params(
     temp_mf_loads.assign(population_size, 0.0);
 
     // Initialize Sequelae
-    int num_sequelae = sequelae_active.size();
-    std::vector<double> sequelae_probabilities(num_sequelae);
-    std::vector<SequelaeProbTimeUnit> sequelae_timescales(num_sequelae);
-    std::vector<int> sequelae_countdowns(num_sequelae);
-    std::vector<double> sequelae_avg_ages(num_sequelae);
+    int num_sequelae = sequelae_params.size();
+    sequelae.resize(num_sequelae);
 
     for (int s = 0; s < num_sequelae; ++s) {
-        sequelae_probabilities[s] = sequelae_params.get_probability(sequelae_active[s]);
-        sequelae_timescales[s] = sequelae_params.get_timescale(sequelae_active[s]);
-        sequelae_countdowns[s] = sequelae_params.get_countdown(sequelae_active[s]);
-        sequelae_avg_ages[s] = sequelae_params.get_avg_age(sequelae_active[s]);
+        switch(sequelae_params[s]->sequelae_model_type) {
+            case SequelaeModelType::TimestepProb: {
+                const TimestepProbSequelaeParams& tsp = static_cast<TimestepProbSequelaeParams&>(*sequelae_params[s]);
+                sequelae[s] = std::make_unique<TimestepProbSequelae>(
+                    TimestepProbSequelae(
+                        tsp.sequelae_type, tsp.sequelae_model_type, population_size,
+                        tsp.base_probability, tsp.prob_timescale, tsp.min_age_test,
+                        tsp.min_infection, tsp.retest_tested_indivs, tsp.countdown_timesteps,
+                        tsp.status_end_countdown, tsp.use_raw_infection_for_test,
+                        tsp.average_age
+                    )
+                );
+                break;
+            }
+            case SequelaeModelType::ExponentialProb: {
+                const ExponentialProbSequelaeParams& esp = static_cast<ExponentialProbSequelaeParams&>(*sequelae_params[s]);
+                sequelae[s] = std::make_unique<ExponentialProbSequelae>(
+                    ExponentialProbSequelae(
+                        esp.sequelae_type, esp.sequelae_model_type, population_size,
+                        esp.base_probability, esp.prob_timescale, esp.min_age_test,
+                        esp.min_infection, esp.retest_tested_indivs, esp.countdown_timesteps,
+                        esp.status_end_countdown, esp.use_raw_infection_for_test,
+                        esp.prob_intercept, esp.prob_slope
+                    )
+                );
+                break;
+            }
+            case SequelaeModelType::PowerLawProb: {
+                const PowerLawProbSequelaeParams& psp = static_cast<PowerLawProbSequelaeParams&>(*sequelae_params[s]);
+                sequelae[s] = std::make_unique<PowerLawProbSequelae>(
+                    PowerLawProbSequelae(
+                        psp.sequelae_type, psp.sequelae_model_type, population_size,
+                        psp.base_probability, psp.prob_timescale, psp.min_age_test,
+                        psp.min_infection, psp.retest_tested_indivs, psp.countdown_timesteps,
+                        psp.status_end_countdown, psp.use_raw_infection_for_test, 
+                        psp.prob_intercept, psp.prob_slope
+                    )
+                );
+                break;
+            }
+            case SequelaeModelType::OAE: {
+                const OAESequelaeParams& osp = static_cast<OAESequelaeParams&>(*sequelae_params[s]);
+                sequelae[s] = std::make_unique<OAESequelae>(
+                    OAESequelae(
+                        osp.sequelae_type, osp.sequelae_model_type, population_size,
+                        osp.base_probability, osp.prob_timescale, osp.min_age_test,
+                        osp.min_infection, osp.retest_tested_indivs, osp.countdown_timesteps,
+                        osp.status_end_countdown, osp.use_raw_infection_for_test,
+                        osp.prob_intercept, osp.prob_slope,
+                        gen, osp.max_age_test, ages
+                    )
+                );
+                break;
+            }
+            default: {
+                const SequelaeParams& sp = *sequelae_params[s];
+                sequelae[s] = std::make_unique<Sequelae>(
+                    Sequelae(
+                        sp.sequelae_type, sp.sequelae_model_type, population_size,
+                        sp.base_probability, sp.prob_timescale, sp.min_age_test,
+                        sp.min_infection, sp.retest_tested_indivs, sp.countdown_timesteps,
+                        sp.status_end_countdown, sp.use_raw_infection_for_test
+                    )
+                );
+            }
+        }
     }
-    sequelae = Sequelae(
-        sequelae_active, population_size,
-        sequelae_probabilities, sequelae_timescales,
-        sequelae_countdowns, sequelae_avg_ages
-    );
 }
 
 void People::generate_random_vals_for_diagnostic(std::mt19937& gen) {
@@ -155,11 +208,8 @@ void People::update_compliance(std::mt19937& gen, double rho, double total_popul
     std::sort(rank_indices.begin(), rank_indices.end(),
         [&](int a, int b) { return compliance[valid_indices[a]] < compliance[valid_indices[b]]; }
     );
-    std::vector<double> updated_compliance(n);
     for (int i = 0; i < n; ++i)
         compliance[valid_indices[rank_indices[i]]] = new_compliance[i];
-
-    compliance = updated_compliance;
 }
 
 void People::apply_treatment_round(std::mt19937& gen, int minimum_age_of_treatment, int current_time_step) {
@@ -277,32 +327,32 @@ void People::update_ov16_status_individual(int indiv_index) {
     ov16_serostatus[indiv_index] = ov16_serostatus[indiv_index] ? !seroreversion_condition_to_use : ov16_serostatus[indiv_index];
 }
 
-void People::update_all_sequelae_individual(
-    std::mt19937& generator, int indiv_index,
-    double timestep_years, int days_in_year,
-    int skin_snip_weight, int num_skin_snips
-) {
-    sequelae.update_all_sequelae_indiv(
-        generator, uniform_dist,
-        indiv_index, timestep_years, days_in_year,
-        ages[indiv_index], microfilariae.get_raw_load(indiv_index), 
-        microfilariae.get_skin_snip_load_person(
-            generator, indiv_index, skin_snip_weight, num_skin_snips
-        )
-    );
-}
-
 void People::update_all_status(
     std::mt19937& generator,
     double timestep_years, int days_in_year,
     int skin_snip_weight, int num_skin_snips
 ) {
+    std::vector<int> skin_snip_count(population_size);
+    std::vector<int> raw_mf_count(population_size);
+    bool mating_worm_pair = false;
+    bool male_female_worm_pair = false;
     for (int i = 0; i < population_size; ++i) {
         update_ov16_status_individual(i);
-        update_all_sequelae_individual(
-            generator, i, timestep_years,
-            days_in_year, skin_snip_weight,
-            num_skin_snips
+        skin_snip_count[i] = round(microfilariae.get_skin_snip_load_person(generator, i, skin_snip_weight, num_skin_snips));
+        raw_mf_count[i] = round(microfilariae.get_raw_load(i));
+        bool has_male_worm = male_worms.get_raw_load(i) > 0;
+        bool has_fertile_female_worm = fertile_female_worms.get_raw_load(i) > 0;
+        bool has_infertile_female_worm = infertile_female_worms.get_raw_load(i) > 0;
+
+        mating_worm_pair = has_male_worm && has_fertile_female_worm;
+        male_female_worm_pair = has_male_worm && (has_fertile_female_worm || has_infertile_female_worm);
+    }
+    for (auto& s : sequelae) {
+        s->update_all_individuals(
+            generator, uniform_dist, timestep_years, 
+            days_in_year, population_size, ages,
+            raw_mf_count, skin_snip_count,
+            mating_worm_pair, male_female_worm_pair
         );
     }
 
@@ -326,6 +376,12 @@ void People::age(
     if (treatment_params.has_value()) {
         drug_params = &treatment_params->drug_params;
     }
+
+    // Age MF
+    microfilariae.age(
+        current_timestep, timestep_years, male_worms, fertile_female_worms,
+        drug_params, number_of_treatments, time_of_last_treatment
+    );
 
     // Age male worms
     male_worms.age(
@@ -351,12 +407,6 @@ void People::age(
     fertile_female_worms.age_helper_swapped_worms(temp_to_fertile);
     infertile_female_worms.age_helper_swapped_worms(temp_to_infertile);
 
-    // Age MF
-    microfilariae.age(
-        current_timestep, timestep_years, male_worms, fertile_female_worms,
-        drug_params, number_of_treatments, time_of_last_treatment
-    );
-
     // Advance L3 delay buffer
     l3.age_all();
 
@@ -366,6 +416,7 @@ void People::age(
 }
 
 void People::process_deaths(std::mt19937& gen) {
+    int total_deaths = 0;
     for (int i = 0; i < population_size; ++i) {
         bool is_dead = death_dist(gen) || (ages[i] > max_age);
         if (!is_dead) continue;
@@ -375,6 +426,7 @@ void People::process_deaths(std::mt19937& gen) {
         sex[i] = gender_dist(gen);
         exposure_heterogeneity[i] = gamma_dist(gen);
         ov16_serostatus[i] = false;
+        serorevert_fast[i] = serorevert_fast_dist(gen);
 
         // Reset any treatment_values
         if (_current_rho != -1 && _current_cov != -1) {
@@ -391,14 +443,15 @@ void People::process_deaths(std::mt19937& gen) {
         microfilariae.process_death(i);
         l3.process_death(i);
         blackflies.process_death(i);
-        sequelae.process_death(i);
+        for (auto& s : sequelae)
+            s->process_death(i);
     }
 }
 
 double People::mean_l1_per_blackfly() const { return blackflies.mean_l1(); }
 double People::mean_l2_per_blackfly() const { return blackflies.mean_l2(); }
 double People::mean_l3_per_blackfly() const { return blackflies.mean_l3(); }
-double People::mean_l3_in_blackfly()  const { return blackflies.mean_l3(); }
+double People::mean_l3_prevalence_blackflies()  const { return blackflies.mean_l3_prevalence(); }
 
 std::vector<int> People::get_sub_population(int age_start, int age_end) {
     std::vector<int> indeces_of_sub_pop;

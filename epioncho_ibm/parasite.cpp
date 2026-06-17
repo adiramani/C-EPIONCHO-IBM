@@ -85,10 +85,6 @@ int WormPopulation::fecundity_movement(
     int n = std::max(0, (int)alive_worms);
     if (n == 0) return 0;
 
-    // if (type == WormType::Fertile_Female) {
-    //     std::binomial_distribution<int> dist(n, (fertile_to_infertile_rate + treatment_induced_temp_sterility) * timestep_years);
-    //     return dist(gen);
-    // }
     std::binomial_distribution<int> dist(n, sterility_swap_rate);// infertile_to_fertile_rate * timestep_years);
     return dist(gen);
 }
@@ -136,15 +132,19 @@ void WormPopulation::age(
         
         // Effects of Treatment
         bool was_treated = number_of_treatments[person] > 0;
-        int time_since_treatment_years = was_treated ? (current_timestep - time_of_last_treatment[person]) * timestep_years : -1;
+        double time_since_treatment_years = was_treated ? (current_timestep - time_of_last_treatment[person]) * timestep_years : -1.0;
         
         double treatment_induced_temp_sterility = (was_treated && is_fertile_female) ? drug_params->embryostatic_lambda_max * exp(-drug_params->embryostatic_phi * time_since_treatment_years) : 0;
         bool apply_permanent_infertility = ((number_of_treatments[person] >= 2) && time_since_treatment_years == 0 && is_fertile_or_tmp_infertile_female);
 
         for (int c = 0; c < compartments; ++c) {
-            const int n_worms = std::max(0, (int)parasites[base + c]);
+            const int n_worms = std::max(0, (int)std::round(parasites[base + c]));
             if (n_worms <= 0) {
                 parasites[base + c] += incoming;
+                incoming = 0;
+                if (swapped_out) {
+                    (*swapped_out)[base + c] = 0;
+                }
                 continue;
             }
             double dead_worms = 0.0;
@@ -213,7 +213,7 @@ static double derivmf_rest(
     double mf_current, double mf_previous, double k_in
 ) {
     const double prev_to_curr = std::max(mf_previous * mf_move, 0.0);
-    const double die          = std::max(mf_mort * (mf_current + k_in), 0.0);
+    const double die = std::max(mf_mort * (mf_current + k_in), 0.0);
     const double move_to_next = std::max(mf_move * (mf_current + k_in), 0.0);
     return prev_to_curr - die - move_to_next;
 }
@@ -319,12 +319,14 @@ double MFPopulation::get_skin_snip_load_person(
     int skin_snip_weight, int num_skin_snips
 ) {
     double mf_load = get_raw_load(person_idx);
+    if (mf_load == 0.0)
+        return 0.0;
     double kmf_to_use = kmf_const;
     // if (!use_kmf_const)...
 
     double skin_snip_load = 0.0;
     double mu = skin_snip_weight * mf_load;
-    double p = kmf_to_use / (kmf_to_use * mu);
+    double p = kmf_to_use / (kmf_to_use + mu);
     std::negative_binomial_distribution<int> skin_snip_dist(kmf_to_use, p);
     for (int snip = 0; snip < num_skin_snips; ++snip) {
         skin_snip_load += skin_snip_dist(gen);

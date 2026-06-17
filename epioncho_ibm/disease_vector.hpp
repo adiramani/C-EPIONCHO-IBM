@@ -1,5 +1,5 @@
-#ifndef VECTOR_HPP
-#define VECTOR_HPP
+#ifndef DISEASE_VECTOR_HPP
+#define DISEASE_VECTOR_HPP
 
 #include <vector>
 #include "params.hpp"
@@ -11,6 +11,8 @@ public:
     double v_1 = 0.0;  // L1→L2 per-capita development rate
     double v_2 = 0.0;  // L2→L3 per-capita development rate
     double mu_v = 0.0;  // blackfly per-capita mortality
+    double k0 = 0.0; // intercept for l3 intensity/prevalence relationship
+    double k1 = 0.0; // slope for l3 intensity/prevalence relationship
 
     // length = population size
     std::vector<double> l1;
@@ -24,6 +26,8 @@ public:
         double v_1_,
         double v_2_,
         double mu_v_,
+        double k0_,
+        double k1_,
         double init_L1,
         double init_L2,
         double init_L3
@@ -32,6 +36,7 @@ public:
     double mean_l1() const;
     double mean_l2() const;
     double mean_l3() const;
+    double mean_l3_prevalence() const;
 };
 
 class BlackflyPopulation : public VectorPopulation {

@@ -2,11 +2,12 @@
 #define PEOPLE_HPP
 
 #include "parasite.hpp"
-#include "vector.hpp"
+#include "disease_vector.hpp"
 #include "params.hpp"
 #include "sequelae.hpp"
 #include <vector>
 #include <random>
+#include <memory>
 
 class People {
 public:
@@ -42,7 +43,7 @@ public:
     MFPopulation microfilariae;
     L3Population l3;
     BlackflyPopulation blackflies;
-    Sequelae sequelae;
+    std::vector<std::unique_ptr<Sequelae>> sequelae;
 
     // Other useful structs to be tracked
     std::optional<TreatmentParams> treatment_params = std::nullopt;
@@ -67,8 +68,7 @@ public:
         const WormParams& worm_params,
         const MicrofilariaeParams& mf_params,
         const BlackflyParams& blackfly_params,
-        const SequelaeProbabilities& sequelae_params,
-        const std::vector<SequelaeType>& sequelae_active
+        const std::vector<std::unique_ptr<SequelaeParams>>& sequelae_params
     );
 
     void generate_random_vals_for_diagnostic(std::mt19937& gen);
@@ -95,6 +95,7 @@ public:
     double mean_l1_per_blackfly() const;
     double mean_l2_per_blackfly() const;
     double mean_l3_per_blackfly() const;
+    double mean_l3_prevalence_blackflies() const;
 
     // Returns the mean-L3 value used by wplus1_rate
     double mean_l3_in_blackfly() const;

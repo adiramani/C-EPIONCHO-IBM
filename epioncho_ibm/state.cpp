@@ -1,25 +1,24 @@
 #include "state.hpp"
 
-State::State(const Params& params)
-    : params(params),
-      timestep_years(
+State::State(Params params)
+    : timestep_years(
         params.base.delta_time_days
         / params.base.year_length_days
       ),
-      people(params.base.n_people)
+      people(params.base.n_people),
+      params(std::move(params))
 {
-    generator = std::mt19937(params.base.seed);
+    generator = std::mt19937(this->params.base.seed);
 
     people.initialize_from_params(
         generator,
         timestep_years,
-        params.base.k_E,
-        params.human,
-        params.worms,
-        params.mf,
-        params.blackfly,
-        params.sequelae_probs,
-        params.base.sequela_active
+        this->params.base.k_E,
+        this->params.human,
+        this->params.worms,
+        this->params.mf,
+        this->params.blackfly,
+        this->params.sequelae_params
     );
 }
 
@@ -59,6 +58,9 @@ void State::update_state_summary(const std::vector<int>& filtered_individuals, S
 
         summary.pop_raw_microfilarial_load += people.microfilariae.get_raw_load(indiv);
 
+        summary.l3_per_blackfly = people.mean_l3_per_blackfly();
+        summary.l3_prevalence_blackflies = people.mean_l3_prevalence_blackflies();
+
         double skin_snip_mf_count = people.microfilariae.get_skin_snip_load_person(generator, indiv, params.human.skin_snip_weight, params.human.skin_snip_number);
         summary.pop_skin_snip_microfilarial_load += skin_snip_mf_count;
         summary.skin_snip_positives += skin_snip_mf_count > 0;
@@ -66,8 +68,8 @@ void State::update_state_summary(const std::vector<int>& filtered_individuals, S
         summary.raw_ov16_seropositives += people.ov16_serostatus[indiv];
         summary.adjusted_ov16_seropositives += people.sample_serostatus_individual(indiv, sens, spec);
 
-        for (size_t s = 0; s < params.base.sequela_active.size(); ++s) {
-            summary.sequelae_positives[s] += people.sequelae.indiv_status(summary.active_sequelae[s], indiv);
+        for (size_t s = 0; s < people.sequelae.size(); ++s) {
+            summary.sequelae_positives[s] += people.sequelae[s]->indiv_status(indiv);
         }
     }
 }

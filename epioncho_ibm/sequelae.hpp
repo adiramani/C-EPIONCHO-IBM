@@ -5,55 +5,138 @@
 #include <random>
 
 class Sequelae {
-    private:
-        // size = num_sequelae
-        std::vector<SequelaeType> sequelae_types;
-        std::vector<double> probabilities;
-        std::vector<SequelaeProbTimeUnit> timescales;
-        std::vector<int> countdown_timesteps;
-        // do individuals turn positive or negative at the end of the countdown
-        std::vector<bool> end_countdown;
-        // used for conversion to timestep probabilitiy for certain Sequelae
-        std::vector<double> average_ages;
-        
-        // size = individuals * num_sequelae
-        std::vector<bool> positives;
-        std::vector<bool> has_been_tested;
-        std::vector<int> countdowns;
+    protected:
+        SequelaeType sequelae_type;
+        SequelaeModelType smt;
 
-        int num_sequelae;
         int num_individuals;
-        
+        double base_probability;
+        SequelaeProbTimeUnit prob_timescale;
+        int min_age_test;
+        int min_infection = 0;
+        bool retest_tested_indivs;
+        bool use_raw_infection_for_test = false;
+
+        // number of timesteps to countdown for
+        int countdown_timesteps;
+        // do individuals turn positive or negative at the end of the countdown
+        bool status_end_countdown;
+
+        // size = individuals
+        std::vector<bool> positives;
+        // 0 = not tested or can be retested, 1 = can't be retested, 2 = can't be retested, tested positive
+        std::vector<double> has_been_tested;
+        std::vector<int> countdowns;        
 
     public:
         Sequelae() = default;
 
         Sequelae(
-            std::vector<SequelaeType> sequelae_types, int num_individuals,
-            std::vector<double> probabilities, std::vector<SequelaeProbTimeUnit> timescales,
-            std::vector<int> countdown_timesteps, std::vector<double> average_ages
+            SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
+            double base_probability, SequelaeProbTimeUnit prob_timescale,
+            int min_age_test, int min_infection, bool retest_tested_indivs,
+            int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test
         );
 
-        double calculate_timestep_probability(int sequelae_index, double timestep_years, int days_in_year);
+        SequelaeType get_type();
+        SequelaeModelType get_model_type();
+        bool use_raw_infection();
+
+        virtual double get_probability(double timestep_years, int days_in_year, int infection_level);
 
         void decrease_countdown_individual(int indiv_index);
 
-        bool should_test_individual(
-            SequelaeType st, int person_sequelae_index, double age, 
-            double raw_mf_count, double observed_mf_count
+        virtual bool should_test_individual(
+            int indiv_index, double age,
+            int infection_level,
+            bool mating_worm_pair, bool male_female_worm_pair
         );
 
-        void update_sequelae(SequelaeType st, int person_sequelae_index, bool positive);
-
-        void update_all_sequelae_indiv(
+        virtual void update_all_individuals(
             std::mt19937& generator, std::uniform_real_distribution<double>& uniform_dist,
-            int indiv_index, double timestep_years, int days_in_year,
-            double age, double raw_mf_count, double observed_mf_count
+            double timestep_years, int days_in_year, int num_individuals,
+            const std::vector<double>& ages, const std::vector<int>& infection_levels_raw,
+            const std::vector<int>& infection_levels_ss, bool mating_worm_pair, bool male_female_worm_pair
         );
 
-        void process_death(int indiv_index);
+        virtual void process_death(int indiv_index);
 
-        int indiv_status(SequelaeType sequelae_type, int indiv_index);
+        int indiv_status(int indiv_index);
+};
+
+class TimestepProbSequelae : public Sequelae {
+    protected:
+        // used for conversion to timestep probability for certain Sequelae
+        double average_age;
+    public:
+        TimestepProbSequelae(
+            SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
+            double base_probability, SequelaeProbTimeUnit prob_timescale,
+            int min_age_test, int min_infection, bool retest_tested_indivs,
+            int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+            double average_age
+        );
+
+        double get_probability(double timestep_years, int days_in_year, int infection_level) override;
+};
+
+class ExponentialProbSequelae : public Sequelae {
+    protected:
+        // used for sequelae that have calculated probability based on mf count
+        double prob_intercept;
+        double prob_slope;
+    public:
+        ExponentialProbSequelae(
+            SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
+            double base_probability, SequelaeProbTimeUnit prob_timescale,
+            int min_age_test, int min_infection, bool retest_tested_indivs,
+            int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test, 
+            double prob_intercept, double prob_slope
+        );
+
+        double get_probability(double timestep_years, int days_in_year, int infection_level) override;
+};
+
+class PowerLawProbSequelae : public Sequelae {
+    protected:
+        // used for sequelae that have calculated probability based on mf count
+        double prob_intercept;
+        double prob_slope;
+    public:
+        PowerLawProbSequelae(
+            SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
+            double base_probability, SequelaeProbTimeUnit prob_timescale,
+            int min_age_test, int min_infection, bool retest_tested_indivs,
+            int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test, 
+            double prob_intercept, double prob_slope
+        );
+
+        double get_probability(double timestep_years, int days_in_year, int infection_level) override;
+};
+
+class OAESequelae : public PowerLawProbSequelae {
+    protected:
+        std::mt19937& gen;
+        std::uniform_real_distribution<double> random_age_to_test;
+        std::vector<int> ages_to_test;
+    public:
+        OAESequelae(
+            SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
+            double base_probability, SequelaeProbTimeUnit prob_timescale,
+            int min_age_test, int min_infection, bool retest_tested_indivs,
+            int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test, 
+            double prob_intercept, double prob_slope,
+            std::mt19937& gen, int max_age_test,
+            std::vector<double> initial_ages
+        );
+
+        bool should_test_individual(
+            int indiv_index, double age,
+            int infection_level,
+            bool mating_worm_pair, bool male_female_worm_pair
+        ) override;
+
+        void process_death(int indiv_index) override;
 };
 
 #endif

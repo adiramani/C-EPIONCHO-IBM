@@ -9,58 +9,122 @@
 #include "enums.hpp"
 
 // -------------------- Sequelae Parameters --------------------
-struct SequelaeProbabilities {
-    // Daily probabilities
-    double severe_itch = 0.1636701;
-    double countdown_si = 3;
-    double reactive_skin_disease = 0.04163095;
-    double countdown_rsd = 3;
+struct SequelaeParams {
+    SequelaeType sequelae_type;
+    SequelaeModelType sequelae_model_type;
+    double base_probability;
+    SequelaeProbTimeUnit prob_timescale;
+    int min_age_test;
+    int min_infection; 
+    bool retest_tested_indivs;
+    int countdown_timesteps;
+    bool status_end_countdown;
+    bool use_raw_infection_for_test;
 
-    // Yearly probabilities, need to be recalculated using age
-    double atrophy = 0.036;
-    double avg_age_atr = 22.876;
-    double hanging_groin = 0.018;
-    double avg_age_hg = 22.876;
-    double depigmentation = 0.059;
-    double avg_age_depig = 22.876;
+    SequelaeParams(
+        SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
+        double base_probability, SequelaeProbTimeUnit prob_timescale,
+        int min_age_test, int min_infection, bool retest_tested_indivs,
+        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test
+    ) 
+    : sequelae_type(sequelae_type),
+      sequelae_model_type(sequelae_model_type),
+      base_probability(base_probability),
+      prob_timescale(prob_timescale),
+      min_age_test(min_age_test),
+      min_infection(min_infection),
+      retest_tested_indivs(retest_tested_indivs),
+      countdown_timesteps(countdown_timesteps),
+      status_end_countdown(status_end_countdown),
+      use_raw_infection_for_test(use_raw_infection_for_test)
+    {}
+};
 
-    SequelaeProbabilities() = default;
+struct TimestepProbSequelaeParams : SequelaeParams {
+    double average_age;
 
-    double get_probability(SequelaeType sequelae_type) const {
-        switch (sequelae_type) {
-            case SequelaeType::SevereItch: return severe_itch;
-            case SequelaeType::ReactiveSkinDisease: return reactive_skin_disease;
-            case SequelaeType::Atrophy: return atrophy;
-            case SequelaeType::HangingGroin: return hanging_groin;
-            case SequelaeType::Depigmentation: return depigmentation;
-            default: return 0;
-        }
-    }
+    TimestepProbSequelaeParams(
+        SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
+        double base_probability, SequelaeProbTimeUnit prob_timescale,
+        int min_age_test, int min_infection, bool retest_tested_indivs,
+        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        double average_age
+    )
+    : SequelaeParams(
+        sequelae_type, sequelae_model_type,
+        base_probability, prob_timescale,
+        min_age_test, min_infection, retest_tested_indivs,
+        countdown_timesteps, status_end_countdown, use_raw_infection_for_test
+      ),
+      average_age(average_age)
+    {}
+};
 
-    SequelaeProbTimeUnit get_timescale(SequelaeType sequelae_type) const {
-        switch (sequelae_type) {
-            case SequelaeType::SevereItch: return SequelaeProbTimeUnit::Day;
-            case SequelaeType::ReactiveSkinDisease: return SequelaeProbTimeUnit::Day;
-            default: return SequelaeProbTimeUnit::Year;
-        }
-    }
+struct ExponentialProbSequelaeParams : SequelaeParams {
+    double prob_intercept;
+    double prob_slope;
 
-    int get_countdown(SequelaeType sequelae_type) const {
-        switch (sequelae_type) {
-            case SequelaeType::SevereItch: return countdown_si;
-            case SequelaeType::ReactiveSkinDisease: return countdown_rsd;
-            default: return -1;
-        }
-    }
+    ExponentialProbSequelaeParams(
+        SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
+        double base_probability, SequelaeProbTimeUnit prob_timescale,
+        int min_age_test, int min_infection, bool retest_tested_indivs,
+        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        double prob_intercept, double prob_slope
+    )
+    : SequelaeParams(
+        sequelae_type, sequelae_model_type,
+        base_probability, prob_timescale,
+        min_age_test, min_infection, retest_tested_indivs,
+        countdown_timesteps, status_end_countdown, use_raw_infection_for_test
+      ),
+      prob_intercept(prob_intercept),
+      prob_slope(prob_slope)
+    {}
+};
 
-    double get_avg_age(SequelaeType sequelae_type) const {
-        switch (sequelae_type) {
-            case SequelaeType::Atrophy: return avg_age_atr;
-            case SequelaeType::HangingGroin: return avg_age_hg;
-            case SequelaeType::Depigmentation: return avg_age_depig;
-            default: return -1;
-        }
-    }
+struct PowerLawProbSequelaeParams : SequelaeParams {
+    double prob_intercept;
+    double prob_slope;
+
+    PowerLawProbSequelaeParams(
+        SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
+        double base_probability, SequelaeProbTimeUnit prob_timescale,
+        int min_age_test, int min_infection, bool retest_tested_indivs,
+        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        double prob_intercept, double prob_slope
+    )
+    : SequelaeParams(
+        sequelae_type, sequelae_model_type,
+        base_probability, prob_timescale,
+        min_age_test, min_infection, retest_tested_indivs,
+        countdown_timesteps, status_end_countdown,
+        use_raw_infection_for_test
+      ),
+      prob_intercept(prob_intercept),
+      prob_slope(prob_slope)
+    {}
+};
+
+struct OAESequelaeParams : PowerLawProbSequelaeParams {
+    int max_age_test;
+    
+
+    OAESequelaeParams(
+        SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
+        double base_probability, SequelaeProbTimeUnit prob_timescale,
+        int min_age_test, int min_infection, bool retest_tested_indivs,
+        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        double prob_intercept, double prob_slope, int max_age_test
+    )
+    : PowerLawProbSequelaeParams(
+        sequelae_type, sequelae_model_type,
+        base_probability, prob_timescale,
+        min_age_test, min_infection, retest_tested_indivs,
+        countdown_timesteps, status_end_countdown, use_raw_infection_for_test,
+        prob_intercept, prob_slope
+      ),
+      max_age_test(max_age_test)
+    {}
 };
 
 // -------------------- Treatment Parameters --------------------
@@ -68,14 +132,14 @@ struct InterventionParams {
     // Inclusive of start time, but not end time
     int start_time = 0;
     int end_time = 1;
-    int interval_years = 1;
+    double interval_years = 1;
     bool pre_converted_timesteps = false;
     std::string intervention_name = "";
     InterventionType intervention_type;
     std::vector<int> application_times;
 
     InterventionParams(
-        int start, int end, int interval_years,
+        int start, int end, double interval_years,
         const std::string& name,
         InterventionType type
     ) 
@@ -122,7 +186,7 @@ struct TreatmentParams : public InterventionParams {
     double proportion_never_treated = 0.0;
 
     TreatmentParams(
-        int start, int end, int interval_years,
+        int start, int end, double interval_years,
         std::string intervention_name = "IVM",
         DrugParams drug_params = {},
         int min_age = 5,
@@ -161,7 +225,7 @@ struct VectorControlParams: public InterventionParams {
     std::vector<double> efficacies;
 
     VectorControlParams(
-        int start, int end, int interval_years,
+        int start, int end, double interval_years,
         double efficacy, int bounce_back_intervals = 0,
         std::string intervention_name = ""
     )
@@ -175,7 +239,7 @@ struct VectorControlParams: public InterventionParams {
     }
 
     VectorControlParams(
-        int start, int end, int interval_years,
+        int start, int end, double interval_years,
         std::vector<double> efficacy, int bounce_back_intervals = 0,
         std::string intervention_name = ""
     )
@@ -226,8 +290,8 @@ struct WormParams {
 
 // -------------------- Blackfly Parameters --------------------
 struct BlackflyParams {
-    double delta_h_zero = 0.1864987;
-    double delta_h_inf = 0.002772749;
+    double delta_h_zero; // = 0.1864987;
+    double delta_h_inf; // = 0.002772749;
     double blackfly_mort_per_fly_per_year = 26.0;
     double blackfly_mort_from_mf_per_fly_per_year = 0.39;
     double mu_L3 = 52.0;
@@ -241,9 +305,29 @@ struct BlackflyParams {
     double initial_L1 = 0.03;
     double human_blood_index = 0.63;
     double gonotrophic_cycle_length = 1.0 / 104.0;
-    double c_h = 0.004900419;
+    double c_h; // = 0.004900419;
     double bite_rate_per_person_per_year = 1000.0;
     double l1_delay = 4.0;   // days
+    bool manual_density_dependence_params = false;
+    double k0 = 0.0054; // 95% CI = (0.0012, 0.0097)
+    double k1 = 0.1459; // 95% CI = (0.0548, 0.237)
+    
+    void update_density_dependent_parameters(double k_E) {
+        if (manual_density_dependence_params) {
+            return;
+        }
+        if(k_E == 0.2) {
+            c_h = 0.008; delta_h_inf = 0.003; delta_h_zero = 0.385;
+        } else if (k_E == 0.3) {
+            c_h = 0.005; delta_h_inf = 0.003; delta_h_zero =  0.186;
+        } else if (k_E == 0.4) {
+            c_h = 0.004; delta_h_inf = 0.002; delta_h_zero = 0.118;
+        } else {
+            throw std::invalid_argument(
+                "k_E value must be 0.2, 0.3, or 0.4"
+            );
+        }
+    }
 };
 
 // -------------------- Microfilaria Parameters --------------------
@@ -286,9 +370,8 @@ struct BaseParams {
     double k_E = 0.3;
     double n_treatments_bin_size = 1.0;
     double delta_time_days = 1.0;
-    double year_length_days = 365.0;
+    double year_length_days = 366.0;
     double month_length_days = 28.0;
-    std::vector<SequelaeType> sequela_active = {};
 };
 
 // -------------------- Top-level Params Struct --------------------
@@ -299,9 +382,15 @@ struct Params {
     MicrofilariaeParams mf;
     ExposureParams exposure;
     HumanParams human;
-    SequelaeProbabilities sequelae_probs;
+    std::vector<std::unique_ptr<SequelaeParams>> sequelae_params;
 
     Params() = default;
+
+    Params(const Params&) = delete;
+    Params& operator=(const Params&) = delete;
+
+    Params(Params&&) = default;
+    Params& operator=(Params&&) = default;
 };
 
 struct InputParams {
@@ -314,10 +403,12 @@ struct InputParams {
         std::vector<TreatmentParams> treatments = {},
         std::vector<VectorControlParams> vector_control = {}
     )
-    : params(params),
+    : params(std::move(params)),
       treatments(treatments),
       vector_control(vector_control)
-    {}
+    {
+        this->params.blackfly.update_density_dependent_parameters(params.base.k_E);
+    }
 };
 
 // --------------- Output Struct ----------------------------
@@ -332,7 +423,7 @@ struct OutputInfo {
 
     OutputInfo(
         double end_time_years, double start_time_years = 0,
-        double interval_years = 1,
+        double interval_years = 1.0,
         int start_age = 0, int end_age = 80,
         int year_label_start = 0,
         std::vector<ModelOutputOption> outputs_to_track = {ModelOutputOption::mf_prevalence, ModelOutputOption::adjusted_ov16_seroprevalence}

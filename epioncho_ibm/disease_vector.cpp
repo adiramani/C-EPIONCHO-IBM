@@ -1,4 +1,4 @@
-#include "vector.hpp"
+#include "disease_vector.hpp"
 #include <cmath>
 #include <numeric>
 #include <algorithm>
@@ -8,6 +8,8 @@ VectorPopulation::VectorPopulation(
     double v_1_,
     double v_2_,
     double mu_v_,
+    double k0_,
+    double k1_,
     double init_L1,
     double init_L2,
     double init_L3
@@ -16,6 +18,8 @@ VectorPopulation::VectorPopulation(
     v_1(v_1_),
     v_2(v_2_),
     mu_v(mu_v_),
+    k0(k0_),
+    k1(k1_),
     l1(n_people_, init_L1),
     l2(n_people_, init_L2),
     l3(n_people_, init_L3)
@@ -32,6 +36,8 @@ BlackflyPopulation::BlackflyPopulation(
         params.l1_l2_per_larva_per_year,
         params.l2_l3_per_larva_per_year,
         params.blackfly_mort_per_fly_per_year,
+        params.k0,
+        params.k1,
         params.initial_L1,
         params.initial_L2,
         params.initial_L3
@@ -87,9 +93,10 @@ void BlackflyPopulation::update_all(
                             / (pim + v_1 * std::exp(-(tou_v * timestep_years) * delay_pim));
 
         // ---------- calc_L2 (uses delay slot values before overwrite) ----------
-        const double new_l2 = (delay_l1[person_loc_flat + delay_loc]
-                               * v_1 * std::exp(-(tou_v * timestep_years) * delay_pim))
-                            / (v_2 + mu_v);
+        const double new_l2 = (
+            (delay_l1[person_loc_flat + delay_loc]
+            * v_1 * std::exp(-(tou_v * timestep_years) * delay_pim))
+        ) / (v_2 + mu_v);
 
         // ---------- calc_L3 (uses old l2 before this timestep's update) ----------
         const double new_l3 = (v_2 * l2[p])
@@ -100,12 +107,10 @@ void BlackflyPopulation::update_all(
         l2[p] = new_l2;
         l3[p] = new_l3;
 
-        delay_l1[person_loc_flat + delay_loc] = new_l1;
+        for (int d = 0; d < delay_size; ++d)
+            delay_l1[person_loc_flat + d] = new_l1;
         delay_mf[person_loc_flat + delay_loc] = mf;
         delay_exposure[person_loc_flat + delay_loc] = exp;
-
-        for (int s = 0; s < delay_size; ++s)
-            delay_l1[person_loc_flat + s] = new_l1;
 
         delay_index[p] = (delay_loc + 1 >= delay_size) ? 0 : delay_loc + 1;
     }
@@ -119,4 +124,9 @@ double VectorPopulation::mean_l2() const {
 }
 double VectorPopulation::mean_l3() const {
     return std::accumulate(l3.begin(), l3.end(), 0.0) / n_people;
+}
+double VectorPopulation::mean_l3_prevalence() const {
+    double mean_l3_per_blackfly = mean_l3();
+    double k = k0 + k1 * mean_l3_per_blackfly;
+    return 1 - pow((1 + mean_l3_per_blackfly / k), -k);
 }

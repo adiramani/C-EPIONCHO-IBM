@@ -15,6 +15,8 @@ struct StateSummary {
     double pop_fertile_female_worm_load = 0.0;
     double pop_infertile_female_worm_load = 0.0;
     double pop_perm_sterile_female_worm_load = 0.0;
+    double l3_per_blackfly = 0.0;
+    double l3_prevalence_blackflies = 0.0;
 
     int skin_snip_positives = 0;
     int raw_ov16_seropositives = 0;
@@ -41,6 +43,8 @@ struct StateSummary {
     double mean_raw_ov16_seroprevalence() const { return total_individuals > 0 ? (double)raw_ov16_seropositives / total_individuals : 0.0; }
     double mean_adjusted_ov16_seroprevalence() const { return total_individuals > 0 ? (double)adjusted_ov16_seropositives / total_individuals : 0.0; }
     double percent_never_treated() const { return total_individuals > 0 ? (double)num_never_treated / total_individuals : 0.0; }
+    double mean_l3_per_blackfly() const { return l3_per_blackfly; }
+    double mean_l3_prevalence_blackflies() const { return l3_prevalence_blackflies; }
 
     double sequelae_prevalence(SequelaeType st) const { 
         for (size_t s = 0; s < active_sequelae.size(); ++s) {
@@ -67,7 +71,7 @@ class State {
         State(State&&) = default;
         State& operator = (State&&) = default;
 
-        explicit State(const Params& params);
+        explicit State(Params params);
 
         std::vector<int> get_sub_population(int age_start, int age_end);
 

@@ -3,8 +3,9 @@
 #include <string>
 
 
-ModelOutputs::ModelOutputs(const OutputInfo output_info) 
-    : output_info(output_info) 
+ModelOutputs::ModelOutputs(const OutputInfo output_info, int model_iteration) 
+    : output_info(output_info),
+      model_iteration(model_iteration)
 {
     n_storage_times = output_info.output_time_years.size();
     outputs.resize(output_info.output_time_years.size() * output_info.outputs_to_track.size());
@@ -36,13 +37,19 @@ static double return_metric(StateSummary& s, ModelOutputOption metric) {
         case ModelOutputOption::blindness_prevalence: return s.sequelae_prevalence(SequelaeType::Blindness);
         case ModelOutputOption::visual_impairment_prevalence: return std::min(s.sequelae_prevalence(SequelaeType::Blindness) * 1.78, 1.0);
         case ModelOutputOption::oae_prevalence: return s.sequelae_prevalence(SequelaeType::OAE);
+        case ModelOutputOption::l3_per_blackfly: return s.mean_l3_per_blackfly();
+        case ModelOutputOption::l3_prevalence_blackflies: return s.mean_l3_prevalence_blackflies();
         default: return 0.0;
     }
 }
 
 void ModelOutputs::update(State& state) {
     std::vector<int> inds = state.get_sub_population(output_info.start_age, output_info.end_age);
-    StateSummary summary = StateSummary(state.params.base.sequela_active);
+    int num_sequelae = state.people.sequelae.size();
+    std::vector<SequelaeType> active_sequelae(num_sequelae);
+    for (size_t i = 0; i < num_sequelae; ++i)
+        active_sequelae[i] = state.people.sequelae[i]->get_type();
+    StateSummary summary = StateSummary(active_sequelae);
     state.update_state_summary(inds, summary);
     for(std::size_t i = 0; i < output_info.outputs_to_track.size(); ++i) {
         ModelOutputOption curr_type = output_info.outputs_to_track[i];
@@ -73,23 +80,31 @@ static std::string output_types_to_string(ModelOutputOption metric) {
         case ModelOutputOption::blindness_prevalence: return "blindness_prevalence";
         case ModelOutputOption::visual_impairment_prevalence: return "visual_impairment_prevalence";
         case ModelOutputOption::oae_prevalence: return "oae_prevalence";
+        case ModelOutputOption::l3_per_blackfly: return "l3_per_blackfly";
+        case ModelOutputOption::l3_prevalence_blackflies: return "l3_prevalence_blackflies";
         default: return "unknown";
     }
 }
 
-void ModelOutputs::write(const std::string& path) const {
-    std::ofstream f(path);
+void ModelOutputs::write(const std::string& path, bool update) const {
+    std::ofstream f;
 
-    // Header
-    f << "output_year";
-    for (const auto& output_type : output_info.outputs_to_track) {
-        f << "," << output_types_to_string(output_type);
+    if (update)
+        f.open(path, std::ios::app);
+    else {
+        f.open(path);
+        // Header
+        f << "output_year,iteration,age_start,age_end";
+        for (const auto& output_type : output_info.outputs_to_track) {
+            f << "," << output_types_to_string(output_type);
+        }
+        f << "\n";
     }
-    f << "\n";
 
     // Rows — one per output timepoint
     for (std::size_t t = 0; t < output_info.output_time_years.size(); ++t) {
         f << output_info.pretty_time_years[t];
+        f << "," << model_iteration << "," << output_info.start_age << "," << output_info.end_age;
         for (std::size_t i = 0; i < output_info.outputs_to_track.size(); ++i) {
             f << "," << outputs[(i * output_info.output_time_years.size()) + t];
         }

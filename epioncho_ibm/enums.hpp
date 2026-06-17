@@ -10,6 +10,14 @@ enum class InterventionType {
     MDA
 };
 
+enum class SequelaeModelType {
+    Base,
+    TimestepProb,
+    ExponentialProb,
+    PowerLawProb,
+    OAE
+};
+
 enum class SequelaeType {
     SevereItch,
     ReactiveSkinDisease,
@@ -23,7 +31,8 @@ enum class SequelaeType {
 
 enum class SequelaeProbTimeUnit {
     Year,
-    Day
+    Day,
+    NA
 };
 
 enum class ModelOutputOption {
@@ -46,5 +55,7 @@ enum class ModelOutputOption {
     depigmentation_prevalence,
     blindness_prevalence,
     visual_impairment_prevalence,
-    oae_prevalence
+    oae_prevalence,
+    l3_per_blackfly,
+    l3_prevalence_blackflies
 };
