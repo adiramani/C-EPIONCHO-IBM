@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <format>
 #include "enums.hpp"
+#include <memory>
 
 // -------------------- Sequelae Parameters --------------------
 struct SequelaeParams {
@@ -136,7 +137,7 @@ struct InterventionParams {
     bool pre_converted_timesteps = false;
     std::string intervention_name = "";
     InterventionType intervention_type;
-    std::vector<int> application_times;
+    std::vector<double> application_times;
 
     InterventionParams(
         int start, int end, double interval_years,
@@ -150,7 +151,7 @@ struct InterventionParams {
     }
 
     InterventionParams(
-        std::vector<int> application_times,
+        std::vector<double> application_times,
         bool pre_converted_timesteps,
         const std::string& name,
         InterventionType type
@@ -164,7 +165,7 @@ struct InterventionParams {
         application_times.clear();
         if (interval_years <= 0 || end_time < start_time) return;
 
-        for (int t = start_time; t < end_time; t += interval_years) {
+        for (double t = start_time; t < end_time; t += interval_years) {
             application_times.push_back(t);
         }
     }
@@ -203,7 +204,7 @@ struct TreatmentParams : public InterventionParams {
     {}
 
     TreatmentParams(
-        std::vector<int> application_times,
+        std::vector<double> application_times,
         bool pre_converted_timesteps,
         std::string intervention_name = "IVM",
         DrugParams drug_params = {},
@@ -257,7 +258,7 @@ struct VectorControlParams: public InterventionParams {
     }
 
     VectorControlParams(
-        std::vector<int> application_times,
+        std::vector<double> application_times,
         bool pre_converted_timesteps,
         std::vector<double> efficacy,
         std::string intervention_name = ""
