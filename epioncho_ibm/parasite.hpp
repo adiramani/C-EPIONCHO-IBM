@@ -77,7 +77,7 @@ public:
     void age(
         std::mt19937& gen,
         WormType type,
-        double current_timestep,
+        int current_timestep,
         double timestep_years,
         const std::vector<double>& new_worms,
         std::vector<double>* swapped_out,

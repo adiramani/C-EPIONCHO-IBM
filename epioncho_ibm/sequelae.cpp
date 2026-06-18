@@ -13,9 +13,9 @@ Sequelae::Sequelae(
     min_age_test(min_age_test),
     min_infection(min_infection),
     retest_tested_indivs(retest_tested_indivs),
+    use_raw_infection_for_test(use_raw_infection_for_test),
     countdown_timesteps(countdown_timesteps),
-    status_end_countdown(status_end_countdown),
-    use_raw_infection_for_test(use_raw_infection_for_test)
+    status_end_countdown(status_end_countdown)
 {
     positives.resize(num_individuals, false);
     has_been_tested.resize(num_individuals, 0);
@@ -36,10 +36,10 @@ bool Sequelae::use_raw_infection() {
     return use_raw_infection_for_test;
 }
 
-double Sequelae::get_probability(double timestep_years, int days_in_year, int infection_level) {
-    double exponent = 1.0 / 365.0;//timestep_years;
+double Sequelae::get_probability(double timestep_years, int timesteps_per_year, int /*infection_level*/) {
+    double exponent = 1.0 / timestep_years;
     if (prob_timescale == SequelaeProbTimeUnit::Year)
-        exponent *= 365.0;//days_in_year;
+        exponent *= timesteps_per_year;
     return 1 - pow(1 - base_probability, exponent);
 }
 
@@ -60,7 +60,7 @@ void Sequelae::decrease_countdown_individual(int indiv_index) {
 bool Sequelae::should_test_individual(
     int indiv_index, double age,
     int infection_level,
-    bool mating_worm_pair, bool male_female_worm_pair
+    bool /*mating_worm_pair*/, bool /*male_female_worm_pair*/
 ) {
     bool should_retest = retest_tested_indivs || has_been_tested[indiv_index] == 0;
     bool not_tested_positive = has_been_tested[indiv_index] != 2;
@@ -72,7 +72,7 @@ bool Sequelae::should_test_individual(
 
 void Sequelae::update_all_individuals(
     std::mt19937& generator, std::uniform_real_distribution<double>& uniform_dist,
-    double timestep_years, int days_in_year, int num_individuals,
+    double timestep_years, int timesteps_per_year, int num_individuals,
     const std::vector<double>& ages, const std::vector<int>& infection_levels_raw,
     const std::vector<int>& infection_levels_ss, bool mating_worm_pair, bool male_female_worm_pair
 ) {
@@ -87,7 +87,7 @@ void Sequelae::update_all_individuals(
             decrease_countdown_individual(indiv_index);
             continue;
         }
-        double probability = get_probability(timestep_years, days_in_year, infection_levels_ss[indiv_index]);
+        double probability = get_probability(timestep_years, timesteps_per_year, infection_levels_ss[indiv_index]);
         bool positive = uniform_dist(generator) < probability;
         if (positive)
             countdowns[indiv_index] = countdown_timesteps;
@@ -127,10 +127,10 @@ TimestepProbSequelae::TimestepProbSequelae(
     average_age(average_age)
 {}
 
-double TimestepProbSequelae::get_probability(double timestep_years, int days_in_year, int infection_level) {
-    double exponent = 1.0 / 365.0;//timestep_years;
+double TimestepProbSequelae::get_probability(double timestep_years, int timesteps_per_year, int /*infection_level*/) {
+    double exponent = 1.0 / timestep_years;
     if (prob_timescale == SequelaeProbTimeUnit::Year)
-        exponent *= 365.0;//days_in_year;
+        exponent *= timesteps_per_year;
     exponent *= 1 / average_age;
     return 1 - pow(1 - base_probability, exponent);
 }
@@ -151,10 +151,10 @@ ExponentialProbSequelae::ExponentialProbSequelae(
     prob_slope(prob_slope)
 {}
 
-double ExponentialProbSequelae::get_probability(double timestep_years, int days_in_year, int mf_count) {
-    double exponent = 1.0 / 365.0;//timestep_years;
+double ExponentialProbSequelae::get_probability(double timestep_years, int timesteps_per_year, int mf_count) {
+    double exponent = 1.0 / timestep_years;
     if (prob_timescale == SequelaeProbTimeUnit::Year)
-        exponent *= 365.0;//days_in_year;
+        exponent *= timesteps_per_year;
     return (
         1 - 
         pow(
@@ -180,7 +180,7 @@ PowerLawProbSequelae::PowerLawProbSequelae(
     prob_slope(prob_slope)
 {}
 
-double PowerLawProbSequelae::get_probability(double timestep_years, int days_in_year, int mf_count) {
+double PowerLawProbSequelae::get_probability(double /*timestep_years*/, int /*timesteps_per_year*/, int mf_count) {
     return std::exp(prob_intercept + prob_slope * std::log((double)mf_count + 1.0));
 }
 
@@ -211,7 +211,7 @@ OAESequelae::OAESequelae(
 }
 
 bool OAESequelae::should_test_individual(
-    int indiv_index, double age, int infection_level, bool mating_worm_pair, bool male_female_worm_pair
+    int indiv_index, double age, int /*infection_level*/, bool /*mating_worm_pair*/, bool male_female_worm_pair
 ) {
     bool has_not_been_tested = has_been_tested[indiv_index] == 0;
     bool is_age_to_test = round(age) == ages_to_test[indiv_index];

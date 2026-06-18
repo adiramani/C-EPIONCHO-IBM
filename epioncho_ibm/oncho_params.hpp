@@ -81,19 +81,23 @@ static std::vector<std::unique_ptr<SequelaeParams>> get_all_oncho_sequelae_param
 }
 
 struct DrugParamsIVM : DrugParams {
-    double microfilaricidal_upsilon = 0.0096;
-    double microfilaricidal_kappa = 1.25;
-    double embryostatic_lambda_max = 32.4;
-    double embryostatic_phi = 19.6;
-    double permanent_infertility = 0.345;
+    DrugParamsIVM() {
+        microfilaricidal_upsilon = 0.0096;
+        microfilaricidal_kappa = 1.25;
+        embryostatic_lambda_max = 32.4;
+        embryostatic_phi = 19.6;
+        permanent_infertility = 0.345;
+    }
 };
 
 struct DrugParamsMOX : DrugParams {
-    double microfilaricidal_upsilon = 0.04;
-    double microfilaricidal_kappa = 1.82;
-    double embryostatic_lambda_max = 462;
-    double embryostatic_phi = 4.83;
-    double permanent_infertility = 0.345;
+    DrugParamsMOX() {
+        microfilaricidal_upsilon = 0.04;
+        microfilaricidal_kappa = 1.82;
+        embryostatic_lambda_max = 462;
+        embryostatic_phi = 4.83;
+        permanent_infertility = 0.345;
+    }
 };
 
 #endif

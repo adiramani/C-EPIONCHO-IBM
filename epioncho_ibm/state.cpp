@@ -1,12 +1,12 @@
 #include "state.hpp"
 
 State::State(Params params)
-    : timestep_years(
+    : params(std::move(params)),
+      timestep_years(
         params.base.delta_time_days
         / params.base.year_length_days
       ),
-      people(params.base.n_people),
-      params(std::move(params))
+      people(params.base.n_people)
 {
     generator = std::mt19937(this->params.base.seed);
 

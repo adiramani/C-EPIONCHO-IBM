@@ -47,11 +47,11 @@ void ModelOutputs::update(State& state) {
     std::vector<int> inds = state.get_sub_population(output_info.start_age, output_info.end_age);
     int num_sequelae = state.people.sequelae.size();
     std::vector<SequelaeType> active_sequelae(num_sequelae);
-    for (size_t i = 0; i < num_sequelae; ++i)
+    for (int i = 0; i < num_sequelae; ++i)
         active_sequelae[i] = state.people.sequelae[i]->get_type();
     StateSummary summary = StateSummary(active_sequelae);
     state.update_state_summary(inds, summary);
-    for(std::size_t i = 0; i < output_info.outputs_to_track.size(); ++i) {
+    for(size_t i = 0; i < output_info.outputs_to_track.size(); ++i) {
         ModelOutputOption curr_type = output_info.outputs_to_track[i];
         outputs[(i * n_storage_times) + output_index] = return_metric(summary, curr_type);
     }

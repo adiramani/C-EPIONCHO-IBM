@@ -162,7 +162,7 @@ void People::initialize_from_params(
 }
 
 void People::generate_random_vals_for_diagnostic(std::mt19937& gen) {
-    for (size_t ind = 0; ind < population_size; ++ind) {
+    for (int ind = 0; ind < population_size; ++ind) {
         diagnostic_random_vals_for_timestep[ind] = uniform_dist(gen);
     }
 }
@@ -329,7 +329,7 @@ void People::update_ov16_status_individual(int indiv_index) {
 
 void People::update_all_status(
     std::mt19937& generator,
-    double timestep_years, int days_in_year,
+    double timestep_years, int timesteps_per_year,
     int skin_snip_weight, int num_skin_snips
 ) {
     std::vector<int> skin_snip_count(population_size);
@@ -350,7 +350,7 @@ void People::update_all_status(
     for (auto& s : sequelae) {
         s->update_all_individuals(
             generator, uniform_dist, timestep_years, 
-            days_in_year, population_size, ages,
+            timesteps_per_year, population_size, ages,
             raw_mf_count, skin_snip_count,
             mating_worm_pair, male_female_worm_pair
         );
@@ -368,7 +368,7 @@ bool People::sample_serostatus_individual(int indiv_index, double sens, double s
 
 void People::age(
     std::mt19937& gen, 
-    double current_timestep, double timestep_years,
+    int current_timestep, double timestep_years,
     const std::vector<double>& new_male_worms,
     const std::vector<double>& new_female_worms
 ) {
@@ -416,7 +416,6 @@ void People::age(
 }
 
 void People::process_deaths(std::mt19937& gen) {
-    int total_deaths = 0;
     for (int i = 0; i < population_size; ++i) {
         bool is_dead = death_dist(gen) || (ages[i] > max_age);
         if (!is_dead) continue;

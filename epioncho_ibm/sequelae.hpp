@@ -29,6 +29,7 @@ class Sequelae {
         std::vector<int> countdowns;        
 
     public:
+        virtual ~Sequelae() = default;
         Sequelae() = default;
 
         Sequelae(
@@ -42,7 +43,7 @@ class Sequelae {
         SequelaeModelType get_model_type();
         bool use_raw_infection();
 
-        virtual double get_probability(double timestep_years, int days_in_year, int infection_level);
+        virtual double get_probability(double timestep_years, int timesteps_per_year, int infection_level);
 
         void decrease_countdown_individual(int indiv_index);
 
@@ -54,7 +55,7 @@ class Sequelae {
 
         virtual void update_all_individuals(
             std::mt19937& generator, std::uniform_real_distribution<double>& uniform_dist,
-            double timestep_years, int days_in_year, int num_individuals,
+            double timestep_years, int timesteps_per_year, int num_individuals,
             const std::vector<double>& ages, const std::vector<int>& infection_levels_raw,
             const std::vector<int>& infection_levels_ss, bool mating_worm_pair, bool male_female_worm_pair
         );
@@ -69,6 +70,8 @@ class TimestepProbSequelae : public Sequelae {
         // used for conversion to timestep probability for certain Sequelae
         double average_age;
     public:
+        virtual ~TimestepProbSequelae() = default;
+
         TimestepProbSequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
             double base_probability, SequelaeProbTimeUnit prob_timescale,
@@ -77,7 +80,7 @@ class TimestepProbSequelae : public Sequelae {
             double average_age
         );
 
-        double get_probability(double timestep_years, int days_in_year, int infection_level) override;
+        double get_probability(double timestep_years, int timesteps_per_year, int infection_level) override;
 };
 
 class ExponentialProbSequelae : public Sequelae {
@@ -86,6 +89,8 @@ class ExponentialProbSequelae : public Sequelae {
         double prob_intercept;
         double prob_slope;
     public:
+        virtual ~ExponentialProbSequelae() = default;
+
         ExponentialProbSequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
             double base_probability, SequelaeProbTimeUnit prob_timescale,
@@ -94,7 +99,7 @@ class ExponentialProbSequelae : public Sequelae {
             double prob_intercept, double prob_slope
         );
 
-        double get_probability(double timestep_years, int days_in_year, int infection_level) override;
+        double get_probability(double timestep_years, int timesteps_per_year, int infection_level) override;
 };
 
 class PowerLawProbSequelae : public Sequelae {
@@ -103,6 +108,8 @@ class PowerLawProbSequelae : public Sequelae {
         double prob_intercept;
         double prob_slope;
     public:
+        virtual ~PowerLawProbSequelae() = default;
+
         PowerLawProbSequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
             double base_probability, SequelaeProbTimeUnit prob_timescale,
@@ -111,7 +118,7 @@ class PowerLawProbSequelae : public Sequelae {
             double prob_intercept, double prob_slope
         );
 
-        double get_probability(double timestep_years, int days_in_year, int infection_level) override;
+        double get_probability(double timestep_years, int timesteps_per_year, int infection_level) override;
 };
 
 class OAESequelae : public PowerLawProbSequelae {
@@ -120,6 +127,8 @@ class OAESequelae : public PowerLawProbSequelae {
         std::uniform_real_distribution<double> random_age_to_test;
         std::vector<int> ages_to_test;
     public:
+        virtual ~OAESequelae() = default;
+
         OAESequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
             double base_probability, SequelaeProbTimeUnit prob_timescale,

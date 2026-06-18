@@ -4,9 +4,14 @@
 #include <cstdio>
 #include <ctime>
 #include <sstream>
+#include <omp.h>
 
 static double get_elapsed_time(clock_t start_time) {
     return (double)(clock() - start_time) / CLOCKS_PER_SEC;
+}
+
+static double get_elapsed_time_omp(double start_time) {
+    return omp_get_wtime() - start_time;
 }
 
 // TODO: possibly use cxxopts for parsing params
@@ -48,8 +53,8 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Starting Simulations for kE: " << k_E << " ABR: " << abr << "\n";
     std::vector<ModelOutputs> final_model_outputs;
-    clock_t overall_start = clock();
-#pragma omp parallel for num_threads(11)
+    double overall_start = omp_get_wtime();
+#pragma omp parallel for
     for (int seed = 1; seed <= repeats; ++seed) {
         clock_t start = clock();
         Params parameters;
@@ -107,7 +112,11 @@ int main(int argc, char* argv[]) {
             0.65
         );
 
-        std::vector<TreatmentParams> treatments = {tp_bIVM};
+        std::vector<TreatmentParams> treatments = {tp_aMOX};
+        parameters.base.delta_time_days = 0.5;
+
+        const int total_timesteps = (parameters.base.year_length_days / parameters.base.delta_time_days) * total_years;
+
 
         InputParams input_params(
             std::move(parameters), 
@@ -164,18 +173,18 @@ int main(int argc, char* argv[]) {
             );
         }
 
-        const int timesteps = 365 * total_years;
-        for (int i = 0; i < timesteps; ++i) {
+        for (int i = 0; i < total_timesteps; ++i) {
             for (auto& mo : all_model_outputs) {
                 if (mo.should_update(model.state.current_timestep, model.state.timestep_years))
                     mo.update(model.state);
             }
             model.advance_timestep(verbose);
         }
-
+#pragma omp critical
+{
         for (auto& mo : all_model_outputs)
             final_model_outputs.push_back(mo);
-
+}
         if (enable_timing) {
             printf("Model runtime: %f\n", model.overall_time);
             printf("Total runtime: %f\n", get_elapsed_time(start));
@@ -191,7 +200,7 @@ int main(int argc, char* argv[]) {
         iter++;
     }
 
-    printf("Overall Model Runtime: %f\n", get_elapsed_time(overall_start));
+    printf("Overall Model Runtime: %f\n", get_elapsed_time_omp(overall_start));
 
     return 0;
 }

@@ -122,13 +122,13 @@ public:
 
     void update_all_sequelae_individual(
         std::mt19937& generator, int indiv_index,
-        double timestep_years, int days_in_year,
+        double timestep_years, int timesteps_per_year,
         int skin_snip_weight, int num_skin_snips
     );
 
     void update_all_status(
         std::mt19937& generator,
-        double timestep_years, int days_in_year,
+        double timestep_years, int timesteps_per_year,
         int skin_snip_weight, int num_skin_snips
     );
 
@@ -136,7 +136,7 @@ public:
 
     void age(
         std::mt19937& gen,
-        double current_timestep, double timestep_years,
+        int current_timestep, double timestep_years,
         const std::vector<double>& new_male_worms,
         const std::vector<double>& new_female_worms
     );

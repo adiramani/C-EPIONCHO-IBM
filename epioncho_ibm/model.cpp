@@ -56,9 +56,9 @@ void Model::advance_timestep(bool verbose) {
     state.people.generate_random_vals_for_diagnostic(state.generator);
 
     int current_timestep = state.current_timestep;
+    int timesteps_per_year = state.params.base.year_length_days / state.params.base.delta_time_days;
 
-    double current_year = (double)current_timestep
-                              / state.params.base.year_length_days;
+    double current_year = (double)current_timestep / timesteps_per_year;
 
     // Get all interventions that will be applied in the current year
     int num_vc_year = 0;
@@ -79,7 +79,6 @@ void Model::advance_timestep(bool verbose) {
 
     // See which interventions are applied at the current timestep
     Treatment* applied_treatment = nullptr;
-    int timesteps_per_year = state.params.base.year_length_days / state.params.base.delta_time_days;
     for (auto& intervention : state.current_interventions) {
         if (intervention->isVectorControl()) {
             num_vc_year += 1;
@@ -192,7 +191,7 @@ void Model::advance_timestep(bool verbose) {
     }
 
     state.people.update_all_status(
-        state.generator, state.timestep_years, state.params.base.year_length_days, 
+        state.generator, state.timestep_years, timesteps_per_year, 
         state.params.human.skin_snip_weight, state.params.human.skin_snip_number
     );
 
@@ -207,13 +206,8 @@ void Model::advance_timestep(bool verbose) {
         process_death_time += get_elapsed_time(start);
         overall_time += get_elapsed_time(overall_start);
     }
-    
 
-    // if (verbose) {
-    //     _print_yearly_stats(current_timestep, current_year, num_vc_year, num_mda_year, enable_timing);
-    // }
-
-    state.current_timestep += (int)state.params.base.delta_time_days;
+    state.current_timestep += 1;
 }
 
 void Model::_print_yearly_stats(

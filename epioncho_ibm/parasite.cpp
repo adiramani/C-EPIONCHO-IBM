@@ -92,7 +92,7 @@ int WormPopulation::fecundity_movement(
 void WormPopulation::age(
     std::mt19937& gen,
     WormType type,
-    double current_timestep,
+    int current_timestep,
     double timestep_years,
     const std::vector<double>& new_worms,
     std::vector<double>* swapped_out,
@@ -108,23 +108,30 @@ void WormPopulation::age(
     // creating new binomial distributions for each timestep saves 50% run time for the whole model
     // TODO: since they only change if timestep changes, possibly move the distributions to the population
     // class.
-    std::vector<std::bernoulli_distribution> death_dists;
-    std::vector<std::bernoulli_distribution> death_dists_permanent_sterilization;
+    // std::vector<std::bernoulli_distribution> death_dists;
+    // std::vector<std::bernoulli_distribution> death_dists_permanent_sterilization;
+    std::vector<double> death_dists;
+    std::vector<double> death_dists_permanent_sterilization;
     death_dists.resize(compartments);
     death_dists_permanent_sterilization.resize(compartments);
     for (int c = 0; c < compartments; ++c) {
         double base_mortality = weibull_mortality(c, timestep_years);
-        death_dists[c] = std::bernoulli_distribution(base_mortality);
+        // death_dists[c] = std::bernoulli_distribution(base_mortality);
+        death_dists[c] = base_mortality;
         if (drug_params) {
-            death_dists_permanent_sterilization[c] = std::bernoulli_distribution(
-                std::min(
-                    base_mortality + drug_params->permanent_infertility,
-                    1.0
-                )
+            // death_dists_permanent_sterilization[c] = std::bernoulli_distribution(
+            //     std::min(
+            //         base_mortality + drug_params->permanent_infertility,
+            //         1.0
+            //     )
+            // );
+            death_dists_permanent_sterilization[c] = std::min(
+                base_mortality + drug_params->permanent_infertility,
+                1.0
             );
         }
     }
-    std::bernoulli_distribution ageing_dist(age_rate);
+    // std::bernoulli_distribution ageing_dist(age_rate);
 
     for (int person = 0; person < n_people; ++person) {
         const int base = person * compartments;
@@ -148,18 +155,23 @@ void WormPopulation::age(
                 continue;
             }
             double dead_worms = 0.0;
-            for(int w = 0; w < n_worms; ++w) {
-                dead_worms += apply_permanent_infertility ? death_dists_permanent_sterilization[c](gen) : death_dists[c](gen);
-            }
+            // for(int w = 0; w < n_worms; ++w) {
+            //     dead_worms += apply_permanent_infertility ? death_dists_permanent_sterilization[c](gen) : death_dists[c](gen);
+            // }
+            double death_prob_to_use = apply_permanent_infertility ? death_dists_permanent_sterilization[c] : death_dists[c];
+            std::binomial_distribution<int> death_bin(n_worms, death_prob_to_use);
+            dead_worms = (double)death_bin(gen);
 
 
             const int n_after_death = std::max(0, n_worms - (int)dead_worms);
             double aging_worms = 0.0;
-            if (n_after_death > 0) {
-                for (int nad = 0; nad < n_after_death; ++nad) {
-                    aging_worms += ageing_dist(gen);
-                }
-            }
+            // if (n_after_death > 0) {
+            //     for (int nad = 0; nad < n_after_death; ++nad) {
+            //         aging_worms += ageing_dist(gen);
+            //     }
+            // }
+            std::binomial_distribution<int> ageing_dist(n_after_death, age_rate);
+            aging_worms = (double)ageing_dist(gen);
 
             double outgoing_swapped = 0.0;
             if (type != WormType::Male && type != WormType::Sterilized_Female) {
@@ -294,9 +306,7 @@ void MFPopulation::age(
         // Effects of Treatment
         bool was_treated = number_of_treatments[person] > 0;
         int time_since_treatment_years = was_treated ? (current_timestep - time_of_last_treatment[person]) * timestep_years : -1;
-        
         double treatment_microfilaricidal_effect = was_treated ? pow(time_since_treatment_years + drug_params->microfilaricidal_upsilon, -drug_params->microfilaricidal_kappa) : 0;
-        
         const double male_load = male_worms.get_raw_load(person);
         const int base = person * compartments;
 
