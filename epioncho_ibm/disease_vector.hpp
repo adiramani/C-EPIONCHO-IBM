@@ -62,13 +62,14 @@ public:
     BlackflyPopulation(
         int n_people_,
         const BlackflyParams& params,
-        const std::vector<double>& exposure_heterogeneity
+        const std::vector<double>& exposure_heterogeneity,
+        const double delta_time_days
     );
 
     void process_death(int person_idx);
 
     void update_all(
-        double timestep_years,
+        double days_in_year,
         double beta,
         const std::vector<double>& exposure_vals,
         const std::vector<double>& mf_loads,

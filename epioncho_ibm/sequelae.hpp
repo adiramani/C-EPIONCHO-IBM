@@ -31,6 +31,9 @@ class Sequelae {
     public:
         virtual ~Sequelae() = default;
         Sequelae() = default;
+        virtual std::unique_ptr<Sequelae> clone() const {
+            return std::make_unique<Sequelae>(*this);
+        }
 
         Sequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
@@ -38,6 +41,7 @@ class Sequelae {
             int min_age_test, int min_infection, bool retest_tested_indivs,
             int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test
         );
+
 
         SequelaeType get_type();
         SequelaeModelType get_model_type();
@@ -71,6 +75,9 @@ class TimestepProbSequelae : public Sequelae {
         double average_age;
     public:
         virtual ~TimestepProbSequelae() = default;
+        std::unique_ptr<Sequelae> clone() const override {
+            return std::make_unique<TimestepProbSequelae>(*this);
+        }
 
         TimestepProbSequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
@@ -90,6 +97,9 @@ class ExponentialProbSequelae : public Sequelae {
         double prob_slope;
     public:
         virtual ~ExponentialProbSequelae() = default;
+        std::unique_ptr<Sequelae> clone() const override {
+            return std::make_unique<ExponentialProbSequelae>(*this);
+        }
 
         ExponentialProbSequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
@@ -109,6 +119,9 @@ class PowerLawProbSequelae : public Sequelae {
         double prob_slope;
     public:
         virtual ~PowerLawProbSequelae() = default;
+        std::unique_ptr<Sequelae> clone() const override {
+            return std::make_unique<PowerLawProbSequelae>(*this);
+        }
 
         PowerLawProbSequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,
@@ -128,6 +141,9 @@ class OAESequelae : public PowerLawProbSequelae {
         std::vector<int> ages_to_test;
     public:
         virtual ~OAESequelae() = default;
+        std::unique_ptr<Sequelae> clone() const override {
+            return std::make_unique<OAESequelae>(*this);
+        }
 
         OAESequelae(
             SequelaeType sequelae_type, SequelaeModelType sequelae_model_type, int num_individuals,

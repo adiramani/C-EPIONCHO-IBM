@@ -37,7 +37,7 @@ bool Sequelae::use_raw_infection() {
 }
 
 double Sequelae::get_probability(double timestep_years, int timesteps_per_year, int /*infection_level*/) {
-    double exponent = 1.0 / timestep_years;
+    double exponent = 1.0 * timestep_years;
     if (prob_timescale == SequelaeProbTimeUnit::Year)
         exponent *= timesteps_per_year;
     return 1 - pow(1 - base_probability, exponent);
@@ -128,7 +128,7 @@ TimestepProbSequelae::TimestepProbSequelae(
 {}
 
 double TimestepProbSequelae::get_probability(double timestep_years, int timesteps_per_year, int /*infection_level*/) {
-    double exponent = 1.0 / timestep_years;
+    double exponent = 1.0 * timestep_years;
     if (prob_timescale == SequelaeProbTimeUnit::Year)
         exponent *= timesteps_per_year;
     exponent *= 1 / average_age;
@@ -152,7 +152,7 @@ ExponentialProbSequelae::ExponentialProbSequelae(
 {}
 
 double ExponentialProbSequelae::get_probability(double timestep_years, int timesteps_per_year, int mf_count) {
-    double exponent = 1.0 / timestep_years;
+    double exponent = 1.0 * timestep_years;
     if (prob_timescale == SequelaeProbTimeUnit::Year)
         exponent *= timesteps_per_year;
     return (

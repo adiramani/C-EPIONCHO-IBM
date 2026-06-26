@@ -59,10 +59,13 @@ public:
     std::vector<double> temp_mf_loads;
 
     explicit People(int population_size_);
-
+    People(const People& other);
+    People& operator=(const People& other);
+    
     void initialize_from_params(
         std::mt19937& gen,
         double timestep_years,
+        double delta_time_days,
         double k_e,
         const HumanParams& human_params,
         const WormParams& worm_params,
@@ -134,11 +137,14 @@ public:
 
     bool sample_serostatus_individual(int indiv_index, double sens, double spec);
 
+    void update_worm_dists(double timestep_years);
+
     void age(
         std::mt19937& gen,
         int current_timestep, double timestep_years,
         const std::vector<double>& new_male_worms,
-        const std::vector<double>& new_female_worms
+        const std::vector<double>& new_female_worms,
+        std::vector<double>& age_timers
     );
 
     // Processes deaths: Resets all parasite

@@ -70,8 +70,8 @@ void Model::advance_timestep(bool verbose) {
     }
     state.current_year = current_year;
 
-    if (verbose) {
-        _print_yearly_stats(current_timestep, current_year, num_vc_year, num_mda_year, enable_timing);
+    if (verbose || enable_timing) {
+        _print_yearly_stats(current_timestep, current_year, num_vc_year, num_mda_year, verbose, enable_timing);
     }
 
 
@@ -116,6 +116,7 @@ void Model::advance_timestep(bool verbose) {
                 state.generator, treatment_params.rho, treatment_params.total_population_coverage
             );
         }
+        state.people.update_worm_dists(state.timestep_years);
 
         state.people.apply_treatment_round(state.generator, treatment_params.min_age_of_treatment, current_timestep);
     }
@@ -146,8 +147,10 @@ void Model::advance_timestep(bool verbose) {
         worm_sex_time += get_elapsed_time(start);
         start = clock();
     }
-    const double beta = state.params.blackfly.human_blood_index
-                      / state.params.blackfly.gonotrophic_cycle_length;
+    const double beta = (
+        state.params.blackfly.human_blood_index
+        / state.params.blackfly.gonotrophic_cycle_length
+    );
     state.people.new_established_l3(
         state.generator,
         state.params.blackfly.delta_h_zero,
@@ -167,7 +170,8 @@ void Model::advance_timestep(bool verbose) {
 
     state.people.age(
         state.generator, current_timestep, state.timestep_years,
-        new_male_worms, new_female_worms
+        new_male_worms, new_female_worms, internal_age_timers,
+        worm_burdens, worm_compartments
     );
 
     if (enable_timing) {
@@ -176,7 +180,7 @@ void Model::advance_timestep(bool verbose) {
     }
 
     state.people.blackflies.update_all(
-        state.timestep_years,
+        state.params.base.year_length_days,
         beta,
         exposure_vals,
         state.people.temp_mf_loads,
@@ -212,7 +216,7 @@ void Model::advance_timestep(bool verbose) {
 
 void Model::_print_yearly_stats(
     int current_timestep, double current_year, int num_vc_year,
-    int num_mda_year, bool enable_timing
+    int num_mda_year, bool verbose, bool enable_timing
 ) {
     clock_t start;
     if (enable_timing) {
@@ -221,7 +225,9 @@ void Model::_print_yearly_stats(
     double mf_positives = 0.0;
     double mf_load = 0.0, male_worm_load = 0.0, fertile_worm_load = 0.0, infertile_worm_load = 0.0;
     const double age_tot = std::accumulate(
-        state.people.ages.begin(), state.people.ages.end(), 0.0);
+        state.people.ages.begin(), state.people.ages.end(),
+        0.0
+    );
 
     for (int i = 0; i < state.people.population_size; ++i) {
         const double mf = state.people.temp_mf_loads[i];
@@ -236,21 +242,38 @@ void Model::_print_yearly_stats(
         start = clock();
     }
 
-    if (current_year == std::floor(current_year) || true) {
-        printf("Current Year: %f | ", current_year);
-        printf("Avg MF, MW, WFF, WIF Load: %f, %f, %f, %f\n", mf_load / state.people.population_size, male_worm_load / state.people.population_size, fertile_worm_load / state.people.population_size, infertile_worm_load / state.people.population_size);
+    if (current_year == std::floor(current_year)) {
+        if (verbose || enable_timing)
+            printf("Current Year: %f\n", current_year);
+        if (verbose) {
+            printf("Avg MF, MW, WFF, WIF Load: %f, %f, %f, %f\n", mf_load / state.people.population_size, male_worm_load / state.people.population_size, fertile_worm_load / state.people.population_size, infertile_worm_load / state.people.population_size);
+        }
         if (enable_timing) {
+            printf("--------------- OverallT | GetNwWrm |  WrmSex  |  NewL3T  |  AgeTim  | UpdBlfly | UpdPplSt | ProcDeth | CalcOutp | PrntTime\n");
             printf(
-                "Avg Clocktimes: %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f\n",
+                "Avg Clocktimes: %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f\n",
                 overall_time / current_timestep,
                 get_new_worms_time / current_timestep,
                 worm_sex_time / current_timestep,
                 new_l3_time / current_timestep,
                 age_time / current_timestep,
                 update_blackfly_time  / current_timestep,
+                update_people_status_time / current_timestep,
                 process_death_time / current_timestep,
                 calc_outputs_time / current_timestep,
                 print_time / current_timestep
+            );
+            printf("--------------- DrugParm | MicFlAge | MlWrmAge | InfFemAg | FerFemAg | FemWmSwp | L3Aging  | AgeHuman\n");
+            printf(
+                "Internal Aging: %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f | %.6f\n",
+                internal_age_timers[0] / current_timestep,
+                internal_age_timers[1] / current_timestep,
+                internal_age_timers[2] / current_timestep,
+                internal_age_timers[3] / current_timestep,
+                internal_age_timers[4] / current_timestep,
+                internal_age_timers[5] / current_timestep,
+                internal_age_timers[6] / current_timestep,
+                internal_age_timers[7] / current_timestep
             );
         }
     }

@@ -41,7 +41,7 @@ public:
     double weibull_mortality(int c, double timestep_years) const;
 
     // Zero all compartments for one person (on birth/death)
-    void process_death(int person_idx);
+    virtual void process_death(int person_idx);
 
     double get_raw_load(int person_idx) const;
 
@@ -56,6 +56,9 @@ public:
     float fertile_to_infertile_rate = 0.0f;  // lambda_zero
     float F = 0.0f;
     float G = 0.0f;
+    std::vector<double> death_dists;
+    std::vector<double> death_dists_permanent_sterilization;
+    double ageing_dist;
 
     WormPopulation() = default;
     WormPopulation(int n_people_, const WormParams& params, int initial_worms);
@@ -68,6 +71,8 @@ public:
         double treatment_induced_temp_sterility,
         std::mt19937& gen
     ) const;
+
+    void update_death_dists(double timestep_years, DrugParams* drug_params);
 
     // Ages every person in one pass.
     // new_worms[i] = newly established L3 entering person i this timestep
@@ -86,8 +91,35 @@ public:
         std::vector<int>& time_of_last_treatment
     );
 
+    void age_single(
+        int person_index,
+        std::mt19937& gen,
+        WormType type,
+        int current_timestep,
+        double timestep_years,
+        const std::vector<double>& new_worms,
+        DrugParams* drug_params,
+        std::vector<int>& number_of_treatments,
+        std::vector<int>& time_of_last_treatment
+    );
+
+    void age_single_swap(
+        int person_index,
+        std::mt19937& gen,
+        WormType type,
+        int current_timestep,
+        double timestep_years,
+        const std::vector<double>& new_worms,
+        std::vector<double>& swapped_out,
+        DrugParams* drug_params,
+        std::vector<int>& number_of_treatments,
+        std::vector<int>& time_of_last_treatment
+    );
+
     // Add incoming worms that switched from the complementary population
     void age_helper_swapped_worms(const std::vector<double>& incoming);
+
+    void process_death(int person_idx) override;
 };
 
 class MFPopulation : public ParasitePopulation {
@@ -102,6 +134,8 @@ public:
     MFPopulation(int n_people_, const MicrofilariaeParams& params, double initial_mf);
 
     void age(
+        std::mt19937& gen,
+        bool stochastic,
         int current_timestep,
         double timestep_years,
         const WormPopulation& male_worms,
@@ -114,7 +148,9 @@ public:
     double get_skin_snip_load_person(std::mt19937& gen, int person_idx, int skin_snip_weight, int num_skin_snips);
 
 private:
-    void calc_new_mf_for_person(
+    int calc_new_mf_for_person(
+        std::mt19937& gen,
+        bool stochastic,
         int person,
         double timestep_years,
         double treatment_microfilaricidal_effect,
@@ -122,7 +158,12 @@ private:
         const WormPopulation& ff_worms
     );
 
-    void age_exiting_mf_for_person(int person, int c, double timestep_years, double prev_mf, double treatment_microfilaricidal_effect);
+    int age_exiting_mf_for_person(
+        std::mt19937& gen,
+        bool stochastic,
+        int person, int c, double timestep_years, 
+        double prev_mf, double treatment_microfilaricidal_effect
+    );
 };
 
 class L3Population {

@@ -29,7 +29,8 @@ VectorPopulation::VectorPopulation(
 BlackflyPopulation::BlackflyPopulation(
     int n_people_,
     const BlackflyParams& params,
-    const std::vector<double>& exposure_heterogeneity
+    const std::vector<double>& exposure_heterogeneity,
+    double delta_time_days
 ) : 
     VectorPopulation(
         n_people_,
@@ -42,11 +43,16 @@ BlackflyPopulation::BlackflyPopulation(
         params.initial_L2,
         params.initial_L3
     ),
-    delay_size((int)params.l1_delay),
+    delay_size(
+        std::max(
+            (int)std::round(params.l1_delay / delta_time_days),
+            1
+        )
+    ),
     delay_index(n_people_, 0),
-    delay_l1(n_people_ * (int)params.l1_delay, params.initial_L1),
-    delay_mf(n_people_ * (int)params.l1_delay, 0.0),
-    delay_exposure(n_people_ * (int)params.l1_delay, 0.0),
+    delay_l1(n_people_ * delay_size, params.initial_L1),
+    delay_mf(n_people_ * delay_size, 0.0),
+    delay_exposure(n_people_ * delay_size, 0.0),
     delta_v0(params.delta_v0),
     c_v(params.c_v),
     alpha_v(params.blackfly_mort_from_mf_per_fly_per_year),
@@ -71,7 +77,7 @@ void BlackflyPopulation::process_death(int person_idx) {
 }
 
 void BlackflyPopulation::update_all(
-    double timestep_years,
+    double days_in_year,
     double beta,
     const std::vector<double>& exposure_vals,
     const std::vector<double>& mf_loads,
@@ -85,22 +91,17 @@ void BlackflyPopulation::update_all(
         const double mf = mf_loads[p];
         const double exp = exposure_vals[p];
 
-        // ---------- calc_L1 ----------
         const double pim = mu_v + alpha_v * mf * exp;
         const double density_dep = delta_v0 / (1.0 + c_v * mf * exp);
         const double delay_pim = mu_v + alpha_v * delay_mf[person_loc_flat + delay_loc] * delay_exposure[person_loc_flat + delay_loc];
-        const double new_l1 = (density_dep * beta * exp * mf)
-                            / (pim + v_1 * std::exp(-(tou_v * timestep_years) * delay_pim));
+        const double new_l1 = (density_dep * beta * exp * mf) / (pim + v_1 * std::exp(-(tou_v / days_in_year) * delay_pim));
 
-        // ---------- calc_L2 (uses delay slot values before overwrite) ----------
         const double new_l2 = (
             (delay_l1[person_loc_flat + delay_loc]
-            * v_1 * std::exp(-(tou_v * timestep_years) * delay_pim))
+            * v_1 * std::exp(-(tou_v / days_in_year) * delay_pim))
         ) / (v_2 + mu_v);
 
-        // ---------- calc_L3 (uses old l2 before this timestep's update) ----------
-        const double new_l3 = (v_2 * l2[p])
-                            / (mu_v + mu_l3 + (a_H / gonotrophic_cycle_length));
+        const double new_l3 = (v_2 * l2[p]) / (mu_v + mu_l3 + (a_H / gonotrophic_cycle_length));
 
 
         l1[p] = new_l1;

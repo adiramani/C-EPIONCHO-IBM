@@ -112,7 +112,7 @@ int main(int argc, char* argv[]) {
             0.65
         );
 
-        std::vector<TreatmentParams> treatments = {tp_aMOX};
+        std::vector<TreatmentParams> treatments = {tp_bMOX};
         parameters.base.delta_time_days = 0.5;
 
         const int total_timesteps = (parameters.base.year_length_days / parameters.base.delta_time_days) * total_years;
@@ -160,10 +160,13 @@ int main(int argc, char* argv[]) {
         std::vector<ModelOutputs> all_model_outputs;
 
         for (size_t a = 0; a < age_starts.size(); ++a) {
+            double interval = 1.0;
+            if (age_starts[a] == 0 && age_ends[a] == 81)
+                interval = 1.0 / 8.0;
             all_model_outputs.push_back(
                 ModelOutputs(
                     OutputInfo(
-                        total_years, 0, 1,
+                        total_years, 0.0, interval,
                         age_starts[a], age_ends[a],
                         0,
                         all_outputs

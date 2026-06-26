@@ -21,6 +21,7 @@ People::People(int population_size_)
 void People::initialize_from_params(
     std::mt19937& gen,
     double timestep_years,
+    double delta_time_days,
     double k_e,
     const HumanParams& human_params,
     const WormParams& worm_params,
@@ -73,12 +74,26 @@ void People::initialize_from_params(
     infertile_female_worms = WormPopulation(population_size, worm_params, worm_params.initial_worms);
     sterilized_female_worms = WormPopulation(population_size, worm_params, worm_params.initial_worms);
     male_worms = WormPopulation(population_size, worm_params, worm_params.initial_worms);
+    fertile_female_worms.update_death_dists(timestep_years, nullptr);
+    infertile_female_worms.update_death_dists(timestep_years, nullptr);
+    sterilized_female_worms.update_death_dists(timestep_years, nullptr);
+    male_worms.update_death_dists(timestep_years, nullptr);
 
     microfilariae = MFPopulation(population_size, mf_params, mf_params.initial_mf);
 
-    l3 = L3Population(population_size, (int)worm_params.l3_delay);
+    l3 = L3Population(population_size, 
+        (int)std::max(
+            std::round(worm_params.l3_delay / delta_time_days),
+            1.0
+        )
+    );
 
-    blackflies = BlackflyPopulation(population_size, blackfly_params, exposure_heterogeneity);
+    blackflies = BlackflyPopulation(
+        population_size, 
+        blackfly_params,
+        exposure_heterogeneity,
+        delta_time_days
+    );
 
     // Temporary storage buffers, used to reduce number of times space needs to be allocated
     const int worm_comps = worm_params.worm_age_stages;
@@ -169,7 +184,7 @@ void People::generate_random_vals_for_diagnostic(std::mt19937& gen) {
 
 double People::calculate_individual_compliance(std::mt19937& gen) {
     double alpha = _current_cov * (1.0 - _current_rho) / _current_rho;
-    double beta = (1 - _current_cov) * (1.0 - _current_rho) / _current_rho;
+    double beta = (1.0 - _current_cov) * (1.0 - _current_rho) / _current_rho;
     return beta_distribution(gen, alpha, beta);
 }
 
@@ -182,6 +197,8 @@ void People::calculate_population_compliance(std::mt19937& gen, double rho, doub
             individual = -1;
         else
             individual = calculate_individual_compliance(gen);
+        if (individual == 0)
+            printf("have a 0 compliance guy");
     }
 }
 
@@ -366,53 +383,81 @@ bool People::sample_serostatus_individual(int indiv_index, double sens, double s
     );
 }
 
-void People::age(
-    std::mt19937& gen, 
-    int current_timestep, double timestep_years,
-    const std::vector<double>& new_male_worms,
-    const std::vector<double>& new_female_worms
-) {
+static double get_elapsed_time(clock_t start_time) {
+    return (double)(clock() - start_time) / CLOCKS_PER_SEC;
+}
+
+void People::update_worm_dists(double timestep_years) {
     DrugParams* drug_params = nullptr;
     if (treatment_params.has_value()) {
         drug_params = &treatment_params->drug_params;
     }
+    fertile_female_worms.update_death_dists(timestep_years, drug_params);
+    infertile_female_worms.update_death_dists(timestep_years, drug_params);
+    sterilized_female_worms.update_death_dists(timestep_years, drug_params);
+    male_worms.update_death_dists(timestep_years, drug_params);
+}
 
+void People::age(
+    std::mt19937& gen, 
+    int current_timestep, double timestep_years,
+    const std::vector<double>& new_male_worms,
+    const std::vector<double>& new_female_worms,
+    std::vector<double>& age_timers
+) {
+    clock_t start = clock();
+    DrugParams* drug_params = nullptr;
+    if (treatment_params.has_value()) {
+        drug_params = &treatment_params->drug_params;
+    }
+    age_timers[0] += get_elapsed_time(start);
+    start = clock();
+    
     // Age MF
     microfilariae.age(
+        gen,
+        false, // stochastic
         current_timestep, timestep_years, male_worms, fertile_female_worms,
         drug_params, number_of_treatments, time_of_last_treatment
     );
+    age_timers[1] += get_elapsed_time(start);
+    start = clock();
 
-    // Age male worms
-    male_worms.age(
-        gen, WormType::Male, current_timestep, timestep_years, new_male_worms, nullptr,
-        drug_params, number_of_treatments, time_of_last_treatment
-    );
-
-    // Age infertile females, output worms swapping to fertile female
     std::fill(temp_to_fertile.begin(), temp_to_fertile.end(), 0.0);
-    infertile_female_worms.age(
-        gen, WormType::Infertile_Female, current_timestep, timestep_years, new_female_worms, 
-        &temp_to_fertile, drug_params, number_of_treatments, time_of_last_treatment
-    );
-
-    // Age fertile females, output worms swapping to infertile female
     std::fill(temp_to_infertile.begin(), temp_to_infertile.end(), 0.0);
-    fertile_female_worms.age(
-        gen, WormType::Fertile_Female, current_timestep, timestep_years, temp_zeros,
-        &temp_to_infertile, drug_params, number_of_treatments, time_of_last_treatment
-    );
+    for (int p = 0; p < population_size; ++p) {
+        male_worms.age_single(
+            p, gen, WormType::Male, current_timestep, timestep_years, new_male_worms,
+            drug_params, number_of_treatments, time_of_last_treatment
+        );
+        infertile_female_worms.age_single_swap(
+            p, gen, WormType::Infertile_Female, current_timestep, timestep_years, new_female_worms, temp_to_fertile,
+            drug_params, number_of_treatments, time_of_last_treatment
+        );
+        fertile_female_worms.age_single_swap(
+            p, gen, WormType::Fertile_Female, current_timestep, timestep_years, temp_zeros, temp_to_infertile,
+            drug_params, number_of_treatments, time_of_last_treatment
+        );
+    }
+    age_timers[4] += get_elapsed_time(start);
+    start = clock();
 
     // Apply swapped worms to their destination populations
     fertile_female_worms.age_helper_swapped_worms(temp_to_fertile);
     infertile_female_worms.age_helper_swapped_worms(temp_to_infertile);
+    age_timers[5] += get_elapsed_time(start);
+    start = clock();
 
     // Advance L3 delay buffer
     l3.age_all();
+    age_timers[6] += get_elapsed_time(start);
+    start = clock();
 
     // Increment ages
     for (double& a : ages)
         a += timestep_years;
+    age_timers[7] += get_elapsed_time(start);
+    start = clock();
 }
 
 void People::process_deaths(std::mt19937& gen) {
@@ -460,4 +505,87 @@ std::vector<int> People::get_sub_population(int age_start, int age_end) {
         }
     }
     return indeces_of_sub_pop;
+}
+
+// Cloning helper functions
+People::People(const People& other)
+    : population_size(other.population_size),
+      mean_age(other.mean_age),
+      max_age(other.max_age),
+      gender_ratio(other.gender_ratio),
+      prop_serorevert_fast(other.prop_serorevert_fast),
+      _current_rho(other._current_rho),
+      _current_cov(other._current_cov),
+      gamma_dist(other.gamma_dist),
+      gender_dist(other.gender_dist),
+      death_dist(other.death_dist),
+      serorevert_fast_dist(other.serorevert_fast_dist),
+      uniform_dist(other.uniform_dist),
+      ages(other.ages),
+      sex(other.sex),
+      exposure_heterogeneity(other.exposure_heterogeneity),
+      ov16_serostatus(other.ov16_serostatus),
+      number_of_treatments(other.number_of_treatments),
+      time_of_last_treatment(other.time_of_last_treatment),
+      compliance(other.compliance),
+      serorevert_fast(other.serorevert_fast),
+      fertile_female_worms(other.fertile_female_worms),
+      infertile_female_worms(other.infertile_female_worms),
+      sterilized_female_worms(other.sterilized_female_worms),
+      male_worms(other.male_worms),
+      microfilariae(other.microfilariae),
+      l3(other.l3),
+      blackflies(other.blackflies),
+      treatment_params(other.treatment_params),
+      diagnostic_random_vals_for_timestep(other.diagnostic_random_vals_for_timestep),
+      temp_to_fertile(other.temp_to_fertile),
+      temp_to_infertile(other.temp_to_infertile),
+      temp_zeros(other.temp_zeros),
+      temp_mf_loads(other.temp_mf_loads)
+{
+    sequelae.reserve(other.sequelae.size());
+    for (const auto& s : other.sequelae)
+        sequelae.push_back(s->clone());
+}
+
+People& People::operator=(const People& other) {
+    if (this == &other) return *this;
+    population_size = other.population_size;
+    mean_age = other.mean_age;
+    max_age = other.max_age;
+    gender_ratio = other.gender_ratio;
+    prop_serorevert_fast = other.prop_serorevert_fast;
+    _current_rho = other._current_rho;
+    _current_cov = other._current_cov;
+    gamma_dist = other.gamma_dist;
+    gender_dist = other.gender_dist;
+    death_dist = other.death_dist;
+    serorevert_fast_dist = other.serorevert_fast_dist;
+    uniform_dist = other.uniform_dist;
+    ages = other.ages;
+    sex = other.sex;
+    exposure_heterogeneity = other.exposure_heterogeneity;
+    ov16_serostatus = other.ov16_serostatus;
+    number_of_treatments = other.number_of_treatments;
+    time_of_last_treatment = other.time_of_last_treatment;
+    compliance = other.compliance;
+    serorevert_fast = other.serorevert_fast;
+    fertile_female_worms = other.fertile_female_worms;
+    infertile_female_worms = other.infertile_female_worms;
+    sterilized_female_worms = other.sterilized_female_worms;
+    male_worms = other.male_worms;
+    microfilariae = other.microfilariae;
+    l3 = other.l3;
+    blackflies = other.blackflies;
+    treatment_params = other.treatment_params;
+    diagnostic_random_vals_for_timestep = other.diagnostic_random_vals_for_timestep;
+    temp_to_fertile = other.temp_to_fertile;
+    temp_to_infertile = other.temp_to_infertile;
+    temp_zeros = other.temp_zeros;
+    temp_mf_loads = other.temp_mf_loads;
+    sequelae.clear();
+    sequelae.reserve(other.sequelae.size());
+    for (const auto& s : other.sequelae)
+        sequelae.push_back(s->clone());
+    return *this;
 }

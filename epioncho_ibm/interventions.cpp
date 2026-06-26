@@ -25,7 +25,7 @@ void Intervention::scale_application_times(int timesteps_per_year) {
         params.application_times.end(),
         timestep_scaled_application_times.begin(),
         [timesteps_per_year](auto t) {
-            return std::floor(t * timesteps_per_year);
+            return std::round(t * timesteps_per_year);
         }
     );
 }

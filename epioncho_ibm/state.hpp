@@ -66,12 +66,18 @@ class State {
         std::vector<Intervention*> current_interventions;
         
 
-        State(const State&) = delete;
-        State& operator=(const State&) = delete;
+        State(const State&) = default;
+        State& operator=(const State&) = default;
         State(State&&) = default;
         State& operator = (State&&) = default;
 
         explicit State(Params params);
+
+        // Update state with a complete set of new parameters
+        State with_params(Params new_params) const;
+        
+        // Update state only changing specific parameters
+        State with_params(std::function<void(Params&)> modified_params) const;
 
         std::vector<int> get_sub_population(int age_start, int age_end);
 

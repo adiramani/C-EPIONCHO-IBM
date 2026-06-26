@@ -7,7 +7,7 @@ class Model {
 private:
     void _print_yearly_stats(
         int current_timestep, double current_year, int num_vc_year,
-        int num_mda_year, bool enable_timing
+        int num_mda_year, bool verbose, bool enable_timing
     );
 public:
     State state;
@@ -22,6 +22,9 @@ public:
     double new_l3_time = 0.0;
     double age_time = 0.0;
     double update_blackfly_time = 0.0;
+    std::vector<double> internal_age_timers = std::vector<double>(8, 0.0);
+    std::vector<int> worm_burdens = std::vector<int>(100, 0);
+    std::vector<int> worm_compartments = std::vector<int>(21, 0);
     double update_people_status_time = 0.0;
     double process_death_time = 0.0;
     double calc_outputs_time = 0.0;
@@ -30,6 +33,8 @@ public:
     explicit Model(InputParams input_params, bool enable_timing = false);
 
     void advance_timestep(bool verbose);
+
+    void update_model_params(InputParams new_input);
 
     InputParams params_from_json(const std::string& path);
 };

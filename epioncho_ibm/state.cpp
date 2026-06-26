@@ -13,6 +13,7 @@ State::State(Params params)
     people.initialize_from_params(
         generator,
         timestep_years,
+        this->params.base.delta_time_days,
         this->params.base.k_E,
         this->params.human,
         this->params.worms,

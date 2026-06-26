@@ -387,8 +387,8 @@ struct Params {
 
     Params() = default;
 
-    Params(const Params&) = delete;
-    Params& operator=(const Params&) = delete;
+    Params(const Params&) = default;
+    Params& operator=(const Params&) = default;
 
     Params(Params&&) = default;
     Params& operator=(Params&&) = default;
@@ -433,7 +433,7 @@ struct OutputInfo {
       start_age(start_age), end_age(end_age),
       year_label_start(year_label_start)
     {
-        for (int t = start_time_years; t < end_time_years; t += interval_years) {
+        for (double t = start_time_years; t < end_time_years; t += interval_years) {
             output_time_years.push_back(t);
             pretty_time_years.push_back(year_label_start + t);
         }
