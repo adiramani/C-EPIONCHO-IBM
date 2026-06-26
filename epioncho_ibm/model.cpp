@@ -170,8 +170,7 @@ void Model::advance_timestep(bool verbose) {
 
     state.people.age(
         state.generator, current_timestep, state.timestep_years,
-        new_male_worms, new_female_worms, internal_age_timers,
-        worm_burdens, worm_compartments
+        new_male_worms, new_female_worms, internal_age_timers
     );
 
     if (enable_timing) {
