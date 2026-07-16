@@ -9,14 +9,14 @@ ifeq ($(OPENMP),1)
 
     CXX = /opt/homebrew/opt/llvm/bin/clang++
 
-    OMP_INC = /opt/homebrew/opt/libomp/include
-    OMP_LIB = /opt/homebrew/opt/libomp/lib
+#     OMP_INC = /opt/homebrew/opt/libomp/include
+#     OMP_LIB = /opt/homebrew/opt/libomp/lib
 
     CXXFLAGS += -fopenmp -isysroot $(shell xcrun --show-sdk-path)
     DEBUG_FLAGS += -fopenmp
 
-    CPPFLAGS += -I$(OMP_INC)
-    LDFLAGS += -L$(OMP_LIB) -lomp
+#     CPPFLAGS += -I$(OMP_INC)
+#     LDFLAGS += -L$(OMP_LIB) -lomp
 
 endif
 
@@ -26,7 +26,7 @@ $(BIN): $(SRC)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 debug:
-	$(CXX) $(DEBUG_FLAGS) $(SRC) -o $(BIN)-debug
+	$(CXX) $(DEBUG_FLAGS) $(CXXFLAGS) $(SRC) -o $(BIN)-debug
 
 clean:
 	rm -f $(BIN) $(BIN)-debug

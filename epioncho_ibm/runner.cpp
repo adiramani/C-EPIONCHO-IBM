@@ -62,6 +62,7 @@ int main(int argc, char* argv[]) {
         parameters.base.n_people = 400;
         parameters.base.k_E = k_E;
         parameters.blackfly.bite_rate_per_person_per_year = abr;
+        parameters.blackfly.use_density_dependence = true;
         parameters.sequelae_params = get_all_oncho_sequelae_params();
 
         VectorControlParams vcp = VectorControlParams(
@@ -112,7 +113,7 @@ int main(int argc, char* argv[]) {
             0.65
         );
 
-        std::vector<TreatmentParams> treatments = {tp_bMOX};
+        std::vector<TreatmentParams> treatments = {tp_aMOX};
         parameters.base.delta_time_days = 0.5;
 
         const int total_timesteps = (parameters.base.year_length_days / parameters.base.delta_time_days) * total_years;

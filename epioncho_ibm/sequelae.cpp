@@ -59,7 +59,7 @@ void Sequelae::decrease_countdown_individual(int indiv_index) {
 
 bool Sequelae::should_test_individual(
     int indiv_index, double age,
-    int infection_level,
+    double infection_level,
     bool /*mating_worm_pair*/, bool /*male_female_worm_pair*/
 ) {
     bool should_retest = retest_tested_indivs || has_been_tested[indiv_index] == 0;
@@ -73,8 +73,8 @@ bool Sequelae::should_test_individual(
 void Sequelae::update_all_individuals(
     std::mt19937& generator, std::uniform_real_distribution<double>& uniform_dist,
     double timestep_years, int timesteps_per_year, int num_individuals,
-    const std::vector<double>& ages, const std::vector<int>& infection_levels_raw,
-    const std::vector<int>& infection_levels_ss, bool mating_worm_pair, bool male_female_worm_pair
+    const std::vector<double>& ages, const std::vector<double>& infection_levels_raw,
+    const std::vector<double>& infection_levels_ss, bool mating_worm_pair, bool male_female_worm_pair
 ) {
     for (int indiv_index = 0; indiv_index < num_individuals; ++indiv_index) {
         if (
@@ -87,7 +87,7 @@ void Sequelae::update_all_individuals(
             decrease_countdown_individual(indiv_index);
             continue;
         }
-        double probability = get_probability(timestep_years, timesteps_per_year, infection_levels_ss[indiv_index]);
+        double probability = get_probability(timestep_years, timesteps_per_year, round(infection_levels_ss[indiv_index]));
         bool positive = uniform_dist(generator) < probability;
         if (positive)
             countdowns[indiv_index] = countdown_timesteps;
@@ -211,7 +211,7 @@ OAESequelae::OAESequelae(
 }
 
 bool OAESequelae::should_test_individual(
-    int indiv_index, double age, int /*infection_level*/, bool /*mating_worm_pair*/, bool male_female_worm_pair
+    int indiv_index, double age, double /*infection_level*/, bool /*mating_worm_pair*/, bool male_female_worm_pair
 ) {
     bool has_not_been_tested = has_been_tested[indiv_index] == 0;
     bool is_age_to_test = round(age) == ages_to_test[indiv_index];

@@ -349,14 +349,14 @@ void People::update_all_status(
     double timestep_years, int timesteps_per_year,
     int skin_snip_weight, int num_skin_snips
 ) {
-    std::vector<int> skin_snip_count(population_size);
-    std::vector<int> raw_mf_count(population_size);
+    std::vector<double> skin_snip_count(population_size);
+    std::vector<double> raw_mf_count(population_size);
     bool mating_worm_pair = false;
     bool male_female_worm_pair = false;
     for (int i = 0; i < population_size; ++i) {
         update_ov16_status_individual(i);
-        skin_snip_count[i] = round(microfilariae.get_skin_snip_load_person(generator, i, skin_snip_weight, num_skin_snips));
-        raw_mf_count[i] = round(microfilariae.get_raw_load(i));
+        skin_snip_count[i] = microfilariae.get_skin_snip_load_person(generator, i, skin_snip_weight, num_skin_snips);
+        raw_mf_count[i] = microfilariae.get_raw_load(i);
         bool has_male_worm = male_worms.get_raw_load(i) > 0;
         bool has_fertile_female_worm = fertile_female_worms.get_raw_load(i) > 0;
         bool has_infertile_female_worm = infertile_female_worms.get_raw_load(i) > 0;

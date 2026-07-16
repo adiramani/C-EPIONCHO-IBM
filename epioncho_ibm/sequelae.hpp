@@ -53,15 +53,15 @@ class Sequelae {
 
         virtual bool should_test_individual(
             int indiv_index, double age,
-            int infection_level,
+            double infection_level,
             bool mating_worm_pair, bool male_female_worm_pair
         );
 
         virtual void update_all_individuals(
             std::mt19937& generator, std::uniform_real_distribution<double>& uniform_dist,
             double timestep_years, int timesteps_per_year, int num_individuals,
-            const std::vector<double>& ages, const std::vector<int>& infection_levels_raw,
-            const std::vector<int>& infection_levels_ss, bool mating_worm_pair, bool male_female_worm_pair
+            const std::vector<double>& ages, const std::vector<double>& infection_levels_raw,
+            const std::vector<double>& infection_levels_ss, bool mating_worm_pair, bool male_female_worm_pair
         );
 
         virtual void process_death(int indiv_index);
@@ -157,7 +157,7 @@ class OAESequelae : public PowerLawProbSequelae {
 
         bool should_test_individual(
             int indiv_index, double age,
-            int infection_level,
+            double infection_level,
             bool mating_worm_pair, bool male_female_worm_pair
         ) override;
 

@@ -312,9 +312,14 @@ struct BlackflyParams {
     bool manual_density_dependence_params = false;
     double k0 = 0.0054; // 95% CI = (0.0012, 0.0097)
     double k1 = 0.1459; // 95% CI = (0.0548, 0.237)
+    bool use_density_dependence = true;
     
     void update_density_dependent_parameters(double k_E) {
         if (manual_density_dependence_params) {
+            return;
+        }
+        if (!use_density_dependence) {
+            c_h = 0; delta_h_inf = 0.186; delta_h_zero = 0.186;
             return;
         }
         if(k_E == 0.2) {
