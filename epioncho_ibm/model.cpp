@@ -19,12 +19,6 @@ Model::Model(InputParams input_params, bool enable_timing)
         temp_vc->scale_application_times(timesteps_per_year);
         vector_control.push_back(std::move(temp_vc));
     }
-    // std::cout << "Initialized Model\n";
-    // std::cout << "Timestep in years: "
-    //           << (state.params.base.delta_time_days / state.params.base.year_length_days)
-    //           << "\n";
-    // std::cout << "Seed: " << state.params.base.seed << " | ABR: " << state.params.blackfly.bite_rate_per_person_per_year << " | kE: " << state.params.base.k_E;
-    // std::cout << " | c_h: " << state.params.blackfly.c_h << "\n";
 }
 
 static double get_elapsed_time(clock_t start_time) {
@@ -78,7 +72,7 @@ void Model::advance_timestep(bool verbose) {
     double bite_rate = state.params.blackfly.bite_rate_per_person_per_year;
 
     // See which interventions are applied at the current timestep
-    Treatment* applied_treatment = nullptr;
+    Treatment* applied_treatments = nullptr;
     for (auto& intervention : state.current_interventions) {
         if (intervention->isVectorControl()) {
             num_vc_year += 1;
@@ -92,16 +86,17 @@ void Model::advance_timestep(bool verbose) {
             if (intervention->isVectorControl()) {
                 bite_rate = static_cast<VectorControl*>(intervention)->apply(bite_rate, current_timestep);
             } else if (intervention->isMDA()) {
-                applied_treatment = static_cast<Treatment*>(intervention);
+                applied_treatments = static_cast<Treatment*>(intervention);
             }
         }
     }
 
     // Apply MDA, determine who has been treated
-    if (applied_treatment != nullptr) {
-        TreatmentParams treatment_params = applied_treatment->apply();
+    if (applied_treatments) {
+        TreatmentParams treatment_params = applied_treatments->apply();
         state.people.treatment_params = treatment_params;
-        // Create or udpate compliance values
+
+        // Create or update compliance values
         // TODO: simplify compliance methods to just use the stored treatment_params object.
         if (state.people._current_rho == -1 && state.people._current_cov == -1) {
             state.people.calculate_population_compliance(
@@ -118,7 +113,28 @@ void Model::advance_timestep(bool verbose) {
         }
         state.people.update_worm_dists(state.timestep_years);
 
-        state.people.apply_treatment_round(state.generator, treatment_params.min_age_of_treatment, current_timestep);
+        if (treatment_params.use_infection) {
+            state.people.apply_treatment_round_infection(
+                state.generator, treatment_params.min_age_of_treatment, current_timestep, state.params.human.skin_snip_weight, 
+                state.params.human.skin_snip_number, treatment_params.infection_threshold
+            );
+        } else {
+            state.people.apply_treatment_round(state.generator, treatment_params.min_age_of_treatment, current_timestep);
+        }
+
+        for (int p = 0; p < state.people.population_size; ++p) {
+            int index_to_use = -1;
+            if (state.people.number_of_treatments[p] > 0) {
+                double rand_val = state.people.uniform_dist(state.generator);
+                double cumulative_alloc = 0.0;
+                for (size_t i = 0; i < treatment_params.drug_params.size(); ++i) {
+                    cumulative_alloc += treatment_params.drug_params[i].allocation_proportion;
+                    if (rand_val <= cumulative_alloc && index_to_use == -1)
+                        index_to_use = i;
+                }
+            }
+            state.people.drug_index_to_use[p] = index_to_use != -1 ? index_to_use : 0;
+        }
     }
 
     const auto exposure_vals = state.people.get_exposure(state.params.exposure, state.params.human.gender_ratio);

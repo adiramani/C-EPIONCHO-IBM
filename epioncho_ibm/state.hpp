@@ -85,7 +85,7 @@ class State {
 
         double mf_prevalence(const std::vector<int>& filtered_individuals, int incubation_time_hours = 24);
 
-        void update_state_summary(const std::vector<int>& filtered_individuals, StateSummary& summary, double sens = 0.80, double spec = 0.99);
+        void update_state_summary(const std::vector<int>& filtered_individuals, StateSummary& summary, double sens = 0.60, double spec = 0.969);
 };
 
 #endif

@@ -33,7 +33,10 @@ double State::mf_intensity(const std::vector<int>& filtered_individuals, int inc
         total_intensity += 100;
     }
     for (auto& indiv : filtered_individuals) {
-        total_intensity += people.microfilariae.get_skin_snip_load_person(generator, indiv, params.human.skin_snip_weight, params.human.skin_snip_number);
+        total_intensity += people.microfilariae.get_skin_snip_load_person(
+            generator, indiv, params.human.skin_snip_weight, params.human.skin_snip_number,
+            people.fertile_female_worms.get_raw_load(indiv) + people.infertile_female_worms.get_raw_load(indiv)
+        );
     }
     return total_intensity / filtered_individuals.size();
 }
@@ -44,7 +47,10 @@ double State::mf_prevalence(const std::vector<int>& filtered_individuals, int in
         return 0.0;
     }
     for (auto& indiv : filtered_individuals) {
-        total_prevalence += people.microfilariae.get_skin_snip_load_person(generator, indiv, params.human.skin_snip_weight, params.human.skin_snip_number) > 0;
+        total_prevalence += people.microfilariae.get_skin_snip_load_person(
+            generator, indiv, params.human.skin_snip_weight, params.human.skin_snip_number,
+            people.fertile_female_worms.get_raw_load(indiv) + people.infertile_female_worms.get_raw_load(indiv)
+        ) > 0;
     }
     return total_prevalence / filtered_individuals.size();
 }
@@ -62,7 +68,13 @@ void State::update_state_summary(const std::vector<int>& filtered_individuals, S
         summary.l3_per_blackfly = people.mean_l3_per_blackfly();
         summary.l3_prevalence_blackflies = people.mean_l3_prevalence_blackflies();
 
-        double skin_snip_mf_count = people.microfilariae.get_skin_snip_load_person(generator, indiv, params.human.skin_snip_weight, params.human.skin_snip_number);
+        double total_female_worms = people.fertile_female_worms.get_raw_load(indiv) + people.infertile_female_worms.get_raw_load(indiv);
+
+        double skin_snip_mf_count = people.microfilariae.get_skin_snip_load_person(
+            generator, indiv, params.human.skin_snip_weight, params.human.skin_snip_number,
+            total_female_worms
+        );
+        double mf_load = people.microfilariae.get_raw_load(indiv);
         summary.pop_skin_snip_microfilarial_load += skin_snip_mf_count;
         summary.skin_snip_positives += skin_snip_mf_count > 0;
 

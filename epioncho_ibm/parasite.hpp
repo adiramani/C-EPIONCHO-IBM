@@ -56,8 +56,8 @@ public:
     float fertile_to_infertile_rate = 0.0f;  // lambda_zero
     float F = 0.0f;
     float G = 0.0f;
-    std::vector<double> death_dists;
-    std::vector<double> death_dists_permanent_sterilization;
+    std::vector<double> mortality_rate;
+    std::vector<double> mortality_rate_with_permanent_sterilization;
     double ageing_dist;
 
     WormPopulation() = default;
@@ -72,7 +72,7 @@ public:
         std::mt19937& gen
     ) const;
 
-    void update_death_dists(double timestep_years, DrugParams* drug_params);
+    void update_mortality_rates(double timestep_years, std::vector<DrugParams>& drug_params);
 
     // Ages every person in one pass.
     // new_worms[i] = newly established L3 entering person i this timestep
@@ -86,7 +86,8 @@ public:
         double timestep_years,
         const std::vector<double>& new_worms,
         std::vector<double>* swapped_out,
-        DrugParams* drug_params,
+        DrugParams& drug_params,
+        int drug_index_to_use,
         std::vector<int>& number_of_treatments,
         std::vector<int>& time_of_last_treatment
     );
@@ -98,7 +99,7 @@ public:
         int current_timestep,
         double timestep_years,
         const std::vector<double>& new_worms,
-        DrugParams* drug_params,
+        DrugParams& drug_params,
         std::vector<int>& number_of_treatments,
         std::vector<int>& time_of_last_treatment
     );
@@ -111,9 +112,10 @@ public:
         double timestep_years,
         const std::vector<double>& new_worms,
         std::vector<double>& swapped_out,
-        DrugParams* drug_params,
+        DrugParams& drug_params,
         std::vector<int>& number_of_treatments,
-        std::vector<int>& time_of_last_treatment
+        std::vector<int>& time_of_last_treatment,
+        int drug_index_to_use
     );
 
     // Add incoming worms that switched from the complementary population
@@ -135,17 +137,21 @@ public:
 
     void age(
         std::mt19937& gen,
+        std::vector<int> drug_index_to_use,
         bool stochastic,
         int current_timestep,
         double timestep_years,
         const WormPopulation& male_worms,
         const WormPopulation& fertile_female_worms,
-        DrugParams* drug_params,
+        std::vector<DrugParams>& drug_params,
         std::vector<int>& number_of_treatments,
         std::vector<int>& time_of_last_treatment
     );
 
-    double get_skin_snip_load_person(std::mt19937& gen, int person_idx, int skin_snip_weight, int num_skin_snips);
+    double get_skin_snip_load_person(
+        std::mt19937& gen, int person_idx, int skin_snip_weight, 
+        int num_skin_snips, double female_worm_load
+    );
 
 private:
     int calc_new_mf_for_person(

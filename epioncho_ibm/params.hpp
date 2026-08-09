@@ -18,7 +18,7 @@ struct SequelaeParams {
     int min_age_test;
     int min_infection; 
     bool retest_tested_indivs;
-    int countdown_timesteps;
+    int countdown_days;
     bool status_end_countdown;
     bool use_raw_infection_for_test;
 
@@ -26,7 +26,7 @@ struct SequelaeParams {
         SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
         double base_probability, SequelaeProbTimeUnit prob_timescale,
         int min_age_test, int min_infection, bool retest_tested_indivs,
-        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test
+        int countdown_days, bool status_end_countdown, bool use_raw_infection_for_test
     ) 
     : sequelae_type(sequelae_type),
       sequelae_model_type(sequelae_model_type),
@@ -35,7 +35,7 @@ struct SequelaeParams {
       min_age_test(min_age_test),
       min_infection(min_infection),
       retest_tested_indivs(retest_tested_indivs),
-      countdown_timesteps(countdown_timesteps),
+      countdown_days(countdown_days),
       status_end_countdown(status_end_countdown),
       use_raw_infection_for_test(use_raw_infection_for_test)
     {}
@@ -48,14 +48,14 @@ struct TimestepProbSequelaeParams : SequelaeParams {
         SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
         double base_probability, SequelaeProbTimeUnit prob_timescale,
         int min_age_test, int min_infection, bool retest_tested_indivs,
-        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        int countdown_days, bool status_end_countdown, bool use_raw_infection_for_test,
         double average_age
     )
     : SequelaeParams(
         sequelae_type, sequelae_model_type,
         base_probability, prob_timescale,
         min_age_test, min_infection, retest_tested_indivs,
-        countdown_timesteps, status_end_countdown, use_raw_infection_for_test
+        countdown_days, status_end_countdown, use_raw_infection_for_test
       ),
       average_age(average_age)
     {}
@@ -69,14 +69,14 @@ struct ExponentialProbSequelaeParams : SequelaeParams {
         SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
         double base_probability, SequelaeProbTimeUnit prob_timescale,
         int min_age_test, int min_infection, bool retest_tested_indivs,
-        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        int countdown_days, bool status_end_countdown, bool use_raw_infection_for_test,
         double prob_intercept, double prob_slope
     )
     : SequelaeParams(
         sequelae_type, sequelae_model_type,
         base_probability, prob_timescale,
         min_age_test, min_infection, retest_tested_indivs,
-        countdown_timesteps, status_end_countdown, use_raw_infection_for_test
+        countdown_days, status_end_countdown, use_raw_infection_for_test
       ),
       prob_intercept(prob_intercept),
       prob_slope(prob_slope)
@@ -91,14 +91,14 @@ struct PowerLawProbSequelaeParams : SequelaeParams {
         SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
         double base_probability, SequelaeProbTimeUnit prob_timescale,
         int min_age_test, int min_infection, bool retest_tested_indivs,
-        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        int countdown_days, bool status_end_countdown, bool use_raw_infection_for_test,
         double prob_intercept, double prob_slope
     )
     : SequelaeParams(
         sequelae_type, sequelae_model_type,
         base_probability, prob_timescale,
         min_age_test, min_infection, retest_tested_indivs,
-        countdown_timesteps, status_end_countdown,
+        countdown_days, status_end_countdown,
         use_raw_infection_for_test
       ),
       prob_intercept(prob_intercept),
@@ -114,14 +114,14 @@ struct OAESequelaeParams : PowerLawProbSequelaeParams {
         SequelaeType sequelae_type, SequelaeModelType sequelae_model_type,
         double base_probability, SequelaeProbTimeUnit prob_timescale,
         int min_age_test, int min_infection, bool retest_tested_indivs,
-        int countdown_timesteps, bool status_end_countdown, bool use_raw_infection_for_test,
+        int countdown_days, bool status_end_countdown, bool use_raw_infection_for_test,
         double prob_intercept, double prob_slope, int max_age_test
     )
     : PowerLawProbSequelaeParams(
         sequelae_type, sequelae_model_type,
         base_probability, prob_timescale,
         min_age_test, min_infection, retest_tested_indivs,
-        countdown_timesteps, status_end_countdown, use_raw_infection_for_test,
+        countdown_days, status_end_countdown, use_raw_infection_for_test,
         prob_intercept, prob_slope
       ),
       max_age_test(max_age_test)
@@ -172,19 +172,44 @@ struct InterventionParams {
 };
 
 struct DrugParams {
+    std::string drug_name = "IVM";
     double microfilaricidal_upsilon = 0.0096;
     double microfilaricidal_kappa = 1.25;
     double embryostatic_lambda_max = 32.4;
     double embryostatic_phi = 19.6;
     double permanent_infertility = 0.345;
+    double allocation_proportion = 1;
 };
 
 struct TreatmentParams : public InterventionParams {
-    DrugParams drug_params;
+    std::vector<DrugParams> drug_params;
     int min_age_of_treatment = 5;
     double rho = 0.3;
     double total_population_coverage = 0.65;
     double proportion_never_treated = 0.0;
+    bool use_infection = false;
+    double infection_threshold = 0.0;
+
+    TreatmentParams(
+        int start, int end, double interval_years,
+        std::string intervention_name = "IVM",
+        std::vector<DrugParams> drug_params = {},
+        int min_age = 5,
+        double rho = 0.3,
+        double proportion_never_treated = 0.0,
+        double coverage = 0.65,
+        bool use_infection = false,
+        double infection_threshold = 0.0
+    )
+    : InterventionParams(start, end, interval_years, intervention_name, InterventionType::MDA),
+      drug_params(drug_params),
+      min_age_of_treatment(min_age),
+      rho(rho),
+      total_population_coverage(coverage),
+      proportion_never_treated(proportion_never_treated),
+      use_infection(use_infection),
+      infection_threshold(infection_threshold)
+    {}
 
     TreatmentParams(
         int start, int end, double interval_years,
@@ -193,14 +218,40 @@ struct TreatmentParams : public InterventionParams {
         int min_age = 5,
         double rho = 0.3,
         double proportion_never_treated = 0.0,
-        double coverage = 0.65
+        double coverage = 0.65,
+        bool use_infection = false,
+        double infection_threshold = 0.0
     )
     : InterventionParams(start, end, interval_years, intervention_name, InterventionType::MDA),
+      drug_params(std::vector<DrugParams>{drug_params}),
+      min_age_of_treatment(min_age),
+      rho(rho),
+      total_population_coverage(coverage),
+      proportion_never_treated(proportion_never_treated),
+      use_infection(use_infection),
+      infection_threshold(infection_threshold)
+    {}
+
+    TreatmentParams(
+        std::vector<double> application_times,
+        bool pre_converted_timesteps,
+        std::string intervention_name = "IVM",
+        std::vector<DrugParams> drug_params = {},
+        int min_age = 5,
+        double rho = 0.3,
+        double proportion_never_treated = 0.0,
+        double coverage = 0.65,
+        bool use_infection = false,
+        double infection_threshold = 0.0
+    )
+    : InterventionParams(application_times, pre_converted_timesteps, intervention_name, InterventionType::MDA),
       drug_params(drug_params),
       min_age_of_treatment(min_age),
       rho(rho),
       total_population_coverage(coverage),
-      proportion_never_treated(proportion_never_treated)
+      proportion_never_treated(proportion_never_treated),
+      use_infection(use_infection),
+      infection_threshold(infection_threshold)
     {}
 
     TreatmentParams(
@@ -211,14 +262,18 @@ struct TreatmentParams : public InterventionParams {
         int min_age = 5,
         double rho = 0.3,
         double proportion_never_treated = 0.0,
-        double coverage = 0.65
+        double coverage = 0.65,
+        bool use_infection = false,
+        double infection_threshold = 0.0
     )
     : InterventionParams(application_times, pre_converted_timesteps, intervention_name, InterventionType::MDA),
-      drug_params(drug_params),
+      drug_params(std::vector<DrugParams>{drug_params}),
       min_age_of_treatment(min_age),
       rho(rho),
       total_population_coverage(coverage),
-      proportion_never_treated(proportion_never_treated)
+      proportion_never_treated(proportion_never_treated),
+      use_infection(use_infection),
+      infection_threshold(infection_threshold)
     {}
 };
 
@@ -356,6 +411,11 @@ struct ExposureParams {
     double Q = 1.2;
     double male_exposure_exponent = 0.007;
     double female_exposure_exponent = -0.023;
+    bool use_onchosim_exposure = false;
+    double onchosim_male_max_exp_age = 20;
+    double onchosim_female_max_exp_age = 20;
+    double onchosim_male_max_exp = 1;
+    double onchosim_female_max_exp = 0.7;
 };
 
 // -------------------- Human Parameters --------------------

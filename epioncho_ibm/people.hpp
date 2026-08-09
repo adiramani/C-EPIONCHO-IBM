@@ -47,6 +47,7 @@ public:
 
     // Other useful structs to be tracked
     std::optional<TreatmentParams> treatment_params = std::nullopt;
+    std::vector<int> drug_index_to_use;
     std::vector<double> diagnostic_random_vals_for_timestep;
 
     // Buffers — allocated once, reused every call to age().
@@ -82,6 +83,10 @@ public:
     void calculate_population_compliance(std::mt19937& gen, double rho, double total_population_coverage, double proportion_never_treated);
     void update_compliance(std::mt19937& gen, double rho, double total_population_coverage);
     void apply_treatment_round(std::mt19937& gen, int minimum_age_of_treatment, int current_time_step);
+    void apply_treatment_round_infection(
+        std::mt19937& gen, int minimum_age_of_treatment, int current_time_step,
+        int skin_snip_weight, int skin_snip_number, double infection_threshold
+    );
 
     // Returns exposure values for every person (age- and sex-weighted,
     // heterogeneity-normalised).

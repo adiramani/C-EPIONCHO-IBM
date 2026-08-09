@@ -87,6 +87,7 @@ struct DrugParamsIVM : DrugParams {
         embryostatic_lambda_max = 32.4;
         embryostatic_phi = 19.6;
         permanent_infertility = 0.345;
+        drug_name = "IVM";
     }
 };
 
@@ -97,6 +98,7 @@ struct DrugParamsMOX : DrugParams {
         embryostatic_lambda_max = 462;
         embryostatic_phi = 4.83;
         permanent_infertility = 0.345;
+        drug_name = "MOX";
     }
 };
 

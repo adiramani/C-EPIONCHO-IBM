@@ -50,6 +50,7 @@ void People::initialize_from_params(
     compliance.resize(population_size, 0);
     diagnostic_random_vals_for_timestep.resize(population_size, 1);
     serorevert_fast.resize(population_size, false);
+    drug_index_to_use.resize(population_size, 0);
 
     // Age burn-in
     std::vector<double> curr_age(population_size, 0.0);
@@ -74,10 +75,11 @@ void People::initialize_from_params(
     infertile_female_worms = WormPopulation(population_size, worm_params, worm_params.initial_worms);
     sterilized_female_worms = WormPopulation(population_size, worm_params, worm_params.initial_worms);
     male_worms = WormPopulation(population_size, worm_params, worm_params.initial_worms);
-    fertile_female_worms.update_death_dists(timestep_years, nullptr);
-    infertile_female_worms.update_death_dists(timestep_years, nullptr);
-    sterilized_female_worms.update_death_dists(timestep_years, nullptr);
-    male_worms.update_death_dists(timestep_years, nullptr);
+    std::vector<DrugParams> empty_drug_params; 
+    fertile_female_worms.update_mortality_rates(timestep_years, empty_drug_params);
+    infertile_female_worms.update_mortality_rates(timestep_years, empty_drug_params);
+    sterilized_female_worms.update_mortality_rates(timestep_years, empty_drug_params);
+    male_worms.update_mortality_rates(timestep_years, empty_drug_params);
 
     microfilariae = MFPopulation(population_size, mf_params, mf_params.initial_mf);
 
@@ -114,7 +116,7 @@ void People::initialize_from_params(
                     TimestepProbSequelae(
                         tsp.sequelae_type, tsp.sequelae_model_type, population_size,
                         tsp.base_probability, tsp.prob_timescale, tsp.min_age_test,
-                        tsp.min_infection, tsp.retest_tested_indivs, tsp.countdown_timesteps,
+                        tsp.min_infection, tsp.retest_tested_indivs, std::ceil(tsp.countdown_days / delta_time_days),
                         tsp.status_end_countdown, tsp.use_raw_infection_for_test,
                         tsp.average_age
                     )
@@ -127,7 +129,7 @@ void People::initialize_from_params(
                     ExponentialProbSequelae(
                         esp.sequelae_type, esp.sequelae_model_type, population_size,
                         esp.base_probability, esp.prob_timescale, esp.min_age_test,
-                        esp.min_infection, esp.retest_tested_indivs, esp.countdown_timesteps,
+                        esp.min_infection, esp.retest_tested_indivs, std::ceil(esp.countdown_days / delta_time_days),
                         esp.status_end_countdown, esp.use_raw_infection_for_test,
                         esp.prob_intercept, esp.prob_slope
                     )
@@ -140,7 +142,7 @@ void People::initialize_from_params(
                     PowerLawProbSequelae(
                         psp.sequelae_type, psp.sequelae_model_type, population_size,
                         psp.base_probability, psp.prob_timescale, psp.min_age_test,
-                        psp.min_infection, psp.retest_tested_indivs, psp.countdown_timesteps,
+                        psp.min_infection, psp.retest_tested_indivs, std::ceil(psp.countdown_days / delta_time_days),
                         psp.status_end_countdown, psp.use_raw_infection_for_test, 
                         psp.prob_intercept, psp.prob_slope
                     )
@@ -153,7 +155,7 @@ void People::initialize_from_params(
                     OAESequelae(
                         osp.sequelae_type, osp.sequelae_model_type, population_size,
                         osp.base_probability, osp.prob_timescale, osp.min_age_test,
-                        osp.min_infection, osp.retest_tested_indivs, osp.countdown_timesteps,
+                        osp.min_infection, osp.retest_tested_indivs, std::ceil(osp.countdown_days / delta_time_days),
                         osp.status_end_countdown, osp.use_raw_infection_for_test,
                         osp.prob_intercept, osp.prob_slope,
                         gen, osp.max_age_test, ages
@@ -167,7 +169,7 @@ void People::initialize_from_params(
                     Sequelae(
                         sp.sequelae_type, sp.sequelae_model_type, population_size,
                         sp.base_probability, sp.prob_timescale, sp.min_age_test,
-                        sp.min_infection, sp.retest_tested_indivs, sp.countdown_timesteps,
+                        sp.min_infection, sp.retest_tested_indivs, std::ceil(sp.countdown_days / delta_time_days),
                         sp.status_end_countdown, sp.use_raw_infection_for_test
                     )
                 );
@@ -239,12 +241,32 @@ void People::apply_treatment_round(std::mt19937& gen, int minimum_age_of_treatme
     }
 }
 
+void People::apply_treatment_round_infection(
+    std::mt19937& gen, int minimum_age_of_treatment, int current_time_step,
+    int skin_snip_weight, int skin_snip_number, double infection_threshold
+) {
+    for (int i = 0; i < population_size; ++i) {
+        bool treatable_age = ages[i] >= minimum_age_of_treatment;
+        bool has_infection = microfilariae.get_skin_snip_load_person(
+            gen, i, skin_snip_weight, skin_snip_number, 
+            fertile_female_worms.get_raw_load(i) + infertile_female_worms.get_raw_load(i)
+        ) >= infection_threshold;
+        bool treated = treatable_age && has_infection;
+        number_of_treatments[i] += treated;
+        time_of_last_treatment[i] = treated ? current_time_step : time_of_last_treatment[i];
+    }
+}
+
 std::vector<double> People::get_exposure(
     const ExposureParams& exp_param,
     double sex_ratio
 ) const {
-    const double exp_females = 1.0 / (sex_ratio * (exp_param.Q - 1.0) + 1.0);
-    const double exp_males = exp_param.Q * exp_females;
+    double exp_females = 1.0 / (sex_ratio * (exp_param.Q - 1.0) + 1.0);
+    double exp_males = exp_param.Q * exp_females;
+    if (exp_param.use_onchosim_exposure) {
+        exp_females = exp_param.onchosim_female_max_exp / exp_param.onchosim_female_max_exp_age;
+        exp_males = exp_param.onchosim_male_max_exp / exp_param.onchosim_male_max_exp_age;
+    }
 
     const int n_females = (int)std::accumulate(sex.begin(), sex.end(), 0);
     const int n_males = population_size - n_females;
@@ -255,20 +277,36 @@ std::vector<double> People::get_exposure(
     double tmp_alpha_m = 0.0, tmp_alpha_f = 0.0;
 
     for (int i = 0; i < population_size; ++i) {
-        if (!sex[i]) {
-            age_sex_exp[i] = std::exp(-exp_param.male_exposure_exponent * ages[i]);
-            tmp_alpha_m += age_sex_exp[i];
+        if (exp_param.use_onchosim_exposure) {
+            if (!sex[i]) {
+                age_sex_exp[i] = (
+                    ages[i] >= exp_param.onchosim_male_max_exp_age ? 
+                    exp_param.onchosim_male_max_exp : ages[i] * exp_males
+                );
+            } else {
+                age_sex_exp[i] = (
+                    ages[i] >= exp_param.onchosim_female_max_exp_age ? 
+                    exp_param.onchosim_female_max_exp : ages[i] * exp_females
+                );
+            }
         } else {
-            age_sex_exp[i] = std::exp(-exp_param.female_exposure_exponent * ages[i]);
-            tmp_alpha_f += age_sex_exp[i];
+            if (!sex[i]) {
+                age_sex_exp[i] = std::exp(-exp_param.male_exposure_exponent * ages[i]);
+                tmp_alpha_m += age_sex_exp[i];
+            } else {
+                age_sex_exp[i] = std::exp(-exp_param.female_exposure_exponent * ages[i]);
+                tmp_alpha_f += age_sex_exp[i];
+            }
         }
     }
 
-    const double male_scale = exp_males / (tmp_alpha_m / n_males);
-    const double female_scale = exp_females / (tmp_alpha_f / n_females);
+    if (!exp_param.use_onchosim_exposure) {
+        const double male_scale = exp_males / (tmp_alpha_m / n_males);
+        const double female_scale = exp_females / (tmp_alpha_f / n_females);
 
-    for (int i = 0; i < population_size; ++i)
-        age_sex_exp[i] *= sex[i] ? female_scale : male_scale;
+        for (int i = 0; i < population_size; ++i)
+            age_sex_exp[i] *= sex[i] ? female_scale : male_scale;
+    }
 
     const double mean_het = (
         std::accumulate(exposure_heterogeneity.begin(), exposure_heterogeneity.end(), 0.0)
@@ -354,12 +392,17 @@ void People::update_all_status(
     bool mating_worm_pair = false;
     bool male_female_worm_pair = false;
     for (int i = 0; i < population_size; ++i) {
+        double num_fertile_female_worms = fertile_female_worms.get_raw_load(i);
+        double num_infertile_female_worms = infertile_female_worms.get_raw_load(i);
         update_ov16_status_individual(i);
-        skin_snip_count[i] = microfilariae.get_skin_snip_load_person(generator, i, skin_snip_weight, num_skin_snips);
+        skin_snip_count[i] = microfilariae.get_skin_snip_load_person(
+            generator, i, skin_snip_weight, num_skin_snips,
+            num_fertile_female_worms + num_infertile_female_worms
+        );
         raw_mf_count[i] = microfilariae.get_raw_load(i);
         bool has_male_worm = male_worms.get_raw_load(i) > 0;
-        bool has_fertile_female_worm = fertile_female_worms.get_raw_load(i) > 0;
-        bool has_infertile_female_worm = infertile_female_worms.get_raw_load(i) > 0;
+        bool has_fertile_female_worm = num_fertile_female_worms > 0;
+        bool has_infertile_female_worm = num_infertile_female_worms > 0;
 
         mating_worm_pair = has_male_worm && has_fertile_female_worm;
         male_female_worm_pair = has_male_worm && (has_fertile_female_worm || has_infertile_female_worm);
@@ -388,14 +431,14 @@ static double get_elapsed_time(clock_t start_time) {
 }
 
 void People::update_worm_dists(double timestep_years) {
-    DrugParams* drug_params = nullptr;
-    if (treatment_params.has_value()) {
-        drug_params = &treatment_params->drug_params;
+    std::vector<DrugParams> drug_params;
+    if (treatment_params) {
+        drug_params = treatment_params->drug_params;
     }
-    fertile_female_worms.update_death_dists(timestep_years, drug_params);
-    infertile_female_worms.update_death_dists(timestep_years, drug_params);
-    sterilized_female_worms.update_death_dists(timestep_years, drug_params);
-    male_worms.update_death_dists(timestep_years, drug_params);
+    fertile_female_worms.update_mortality_rates(timestep_years, drug_params);
+    infertile_female_worms.update_mortality_rates(timestep_years, drug_params);
+    sterilized_female_worms.update_mortality_rates(timestep_years, drug_params);
+    male_worms.update_mortality_rates(timestep_years, drug_params);
 }
 
 void People::age(
@@ -406,9 +449,9 @@ void People::age(
     std::vector<double>& age_timers
 ) {
     clock_t start = clock();
-    DrugParams* drug_params = nullptr;
-    if (treatment_params.has_value()) {
-        drug_params = &treatment_params->drug_params;
+    std::vector<DrugParams> drug_params;
+    if (treatment_params) {
+        drug_params = treatment_params->drug_params;
     }
     age_timers[0] += get_elapsed_time(start);
     start = clock();
@@ -416,6 +459,7 @@ void People::age(
     // Age MF
     microfilariae.age(
         gen,
+        drug_index_to_use,
         false, // stochastic
         current_timestep, timestep_years, male_worms, fertile_female_worms,
         drug_params, number_of_treatments, time_of_last_treatment
@@ -425,18 +469,23 @@ void People::age(
 
     std::fill(temp_to_fertile.begin(), temp_to_fertile.end(), 0.0);
     std::fill(temp_to_infertile.begin(), temp_to_infertile.end(), 0.0);
+    DrugParams drug_params_to_use;
     for (int p = 0; p < population_size; ++p) {
+        if (!drug_params.empty() && number_of_treatments[p] > 0) {
+            drug_params_to_use = drug_params[drug_index_to_use[p]];
+        }
+
         male_worms.age_single(
             p, gen, WormType::Male, current_timestep, timestep_years, new_male_worms,
-            drug_params, number_of_treatments, time_of_last_treatment
+            drug_params_to_use, number_of_treatments, time_of_last_treatment
         );
         infertile_female_worms.age_single_swap(
             p, gen, WormType::Infertile_Female, current_timestep, timestep_years, new_female_worms, temp_to_fertile,
-            drug_params, number_of_treatments, time_of_last_treatment
+            drug_params_to_use, number_of_treatments, time_of_last_treatment, drug_index_to_use[p]
         );
         fertile_female_worms.age_single_swap(
             p, gen, WormType::Fertile_Female, current_timestep, timestep_years, temp_zeros, temp_to_infertile,
-            drug_params, number_of_treatments, time_of_last_treatment
+            drug_params_to_use, number_of_treatments, time_of_last_treatment, drug_index_to_use[p]
         );
     }
     age_timers[4] += get_elapsed_time(start);
@@ -537,6 +586,7 @@ People::People(const People& other)
       l3(other.l3),
       blackflies(other.blackflies),
       treatment_params(other.treatment_params),
+      drug_index_to_use(other.drug_index_to_use),
       diagnostic_random_vals_for_timestep(other.diagnostic_random_vals_for_timestep),
       temp_to_fertile(other.temp_to_fertile),
       temp_to_infertile(other.temp_to_infertile),
@@ -578,6 +628,7 @@ People& People::operator=(const People& other) {
     l3 = other.l3;
     blackflies = other.blackflies;
     treatment_params = other.treatment_params;
+    drug_index_to_use = other.drug_index_to_use;
     diagnostic_random_vals_for_timestep = other.diagnostic_random_vals_for_timestep;
     temp_to_fertile = other.temp_to_fertile;
     temp_to_infertile = other.temp_to_infertile;

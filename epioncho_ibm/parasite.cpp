@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 
 ParasitePopulation::ParasitePopulation(
     int n_people_,
@@ -67,19 +68,26 @@ WormPopulation::WormPopulation(int n_people_, const WormParams& params, int init
     fertile_to_infertile_rate((float)params.lambda_zero),
     F((float)params.fecundity_worms_F),
     G((float)params.fecundity_worms_G),
-    death_dists(compartments),
-    death_dists_permanent_sterilization(compartments),
+    mortality_rate(compartments),
+    mortality_rate_with_permanent_sterilization(0),
     ageing_dist(compartments)
 {}
 
-void WormPopulation::update_death_dists(double timestep_years, DrugParams* drug_params) {
+void WormPopulation::update_mortality_rates(double timestep_years, std::vector<DrugParams>& drug_params) {
     const double age_rate = timestep_years / (double)years_per_compartment;
     ageing_dist = age_rate;
+
+    size_t num_drugs = drug_params.size();
+    mortality_rate_with_permanent_sterilization.resize(compartments * num_drugs);
     for (int c = 0; c < compartments; ++c) {
         double base_mortality = 1 - std::exp(-1.0 * weibull_mortality(c, timestep_years));
-        death_dists[c] = base_mortality;
-        if (drug_params) {
-            death_dists_permanent_sterilization[c] = std::min(base_mortality + drug_params->permanent_infertility, 1.0);
+        mortality_rate[c] = base_mortality;
+        if (!drug_params.empty()) {
+            for (size_t d = 0; d < num_drugs; ++d) {
+                mortality_rate_with_permanent_sterilization[d * compartments + c] = std::min(
+                    base_mortality + drug_params[d].permanent_infertility, 1.0
+                );
+            }
         }
     }
 }
@@ -113,7 +121,8 @@ void WormPopulation::age(
     double timestep_years,
     const std::vector<double>& new_worms,
     std::vector<double>* swapped_out,
-    DrugParams* drug_params,
+    DrugParams& drug_params,
+    int drug_index_to_use,
     std::vector<int>& number_of_treatments,
     std::vector<int>& time_of_last_treatment
 ) {
@@ -128,7 +137,7 @@ void WormPopulation::age(
         bool was_treated = number_of_treatments[person] > 0;
         double time_since_treatment_years = was_treated ? (current_timestep - time_of_last_treatment[person]) * timestep_years : -1.0;
         
-        double treatment_induced_temp_sterility = (was_treated && is_fertile_female) ? timestep_years * drug_params->embryostatic_lambda_max * exp(-drug_params->embryostatic_phi * time_since_treatment_years) : 0;
+        double treatment_induced_temp_sterility = (was_treated && is_fertile_female) ? timestep_years * drug_params.embryostatic_lambda_max * exp(-drug_params.embryostatic_phi * time_since_treatment_years) : 0;
         bool apply_permanent_infertility = ((number_of_treatments[person] >= 2) && time_since_treatment_years == 0 && is_fertile_or_tmp_infertile_female);
 
         for (int c = 0; c < compartments; ++c) {
@@ -144,7 +153,7 @@ void WormPopulation::age(
                 continue;
             }
             int dead_worms = 0;
-            double death_prob_to_use = apply_permanent_infertility ? death_dists_permanent_sterilization[c] : death_dists[c];
+            double death_prob_to_use = apply_permanent_infertility ? mortality_rate_with_permanent_sterilization[drug_index_to_use * compartments + c] : mortality_rate[c];
             std::binomial_distribution<int> death_bin(n_worms, death_prob_to_use);
             dead_worms = death_bin(gen);
 
@@ -186,7 +195,7 @@ void WormPopulation::age_single(
     int current_timestep,
     double timestep_years,
     const std::vector<double>& new_worms,
-    DrugParams* drug_params,
+    DrugParams& drug_params,
     std::vector<int>& number_of_treatments,
     std::vector<int>& time_of_last_treatment
 ) {
@@ -203,7 +212,7 @@ void WormPopulation::age_single(
             continue;
         }
         int dead_worms = 0;
-        std::binomial_distribution<int> death_bin(n_worms, death_dists[compartment_index]);
+        std::binomial_distribution<int> death_bin(n_worms, mortality_rate[compartment_index]);
         dead_worms = death_bin(gen);
 
 
@@ -227,9 +236,10 @@ void WormPopulation::age_single_swap(
     double timestep_years,
     const std::vector<double>& new_worms,
     std::vector<double>& swapped_out,
-    DrugParams* drug_params,
+    DrugParams& drug_params,
     std::vector<int>& number_of_treatments,
-    std::vector<int>& time_of_last_treatment
+    std::vector<int>& time_of_last_treatment,
+    int drug_index_to_use
 ) {
     bool is_fertile_female = type == WormType::Fertile_Female;
     bool is_fertile_or_tmp_infertile_female = is_fertile_female || (type == WormType::Infertile_Female);
@@ -241,7 +251,7 @@ void WormPopulation::age_single_swap(
     bool was_treated = number_of_treatments[person_index] > 0;
     double time_since_treatment_years = was_treated ? (current_timestep - time_of_last_treatment[person_index]) * timestep_years : -1.0;
     
-    double treatment_induced_temp_sterility = (was_treated && is_fertile_female) ? timestep_years * drug_params->embryostatic_lambda_max * exp(-drug_params->embryostatic_phi * time_since_treatment_years) : 0;
+    double treatment_induced_temp_sterility = (was_treated && is_fertile_female) ? timestep_years * drug_params.embryostatic_lambda_max * exp(-drug_params.embryostatic_phi * time_since_treatment_years) : 0;
     bool apply_permanent_infertility = ((number_of_treatments[person_index] >= 2) && time_since_treatment_years == 0 && is_fertile_or_tmp_infertile_female);
 
     double sterility_swap_rate = (
@@ -260,8 +270,9 @@ void WormPopulation::age_single_swap(
             swapped_out[base + compartment_index] = 0;
             continue;
         }
+        
         int dead_worms = 0;
-        double death_prob_to_use = apply_permanent_infertility ? death_dists_permanent_sterilization[compartment_index] : death_dists[compartment_index];
+        double death_prob_to_use = apply_permanent_infertility ? mortality_rate_with_permanent_sterilization[drug_index_to_use * compartments + compartment_index] : mortality_rate[compartment_index];
         std::binomial_distribution<int> death_bin(n_worms, death_prob_to_use);
         dead_worms = death_bin(gen);
 
@@ -418,20 +429,25 @@ int MFPopulation::age_exiting_mf_for_person(
 
 void MFPopulation::age(
     std::mt19937& gen,
+    std::vector<int> drug_index_to_use,
     bool stochastic,
     int current_timestep,
     double timestep_years,
     const WormPopulation& male_worms,
     const WormPopulation& fertile_female_worms,
-    DrugParams* drug_params,
+    std::vector<DrugParams>& drug_params,
     std::vector<int>& number_of_treatments,
     std::vector<int>& time_of_last_treatment
 ) {
     for (int person = 0; person < n_people; ++person) {
-        // Effects of Treatment
+        DrugParams* drug_params_to_use = nullptr;
         bool was_treated = number_of_treatments[person] > 0;
+        if (was_treated) {
+            drug_params_to_use = &drug_params[drug_index_to_use[person]];
+        }
+        // Effects of Treatment
         double time_since_treatment_years = was_treated ? (current_timestep - time_of_last_treatment[person]) * timestep_years : -1;
-        double treatment_microfilaricidal_effect = was_treated ? pow(time_since_treatment_years + drug_params->microfilaricidal_upsilon, -drug_params->microfilaricidal_kappa) : 0;
+        double treatment_microfilaricidal_effect = was_treated ? pow(time_since_treatment_years + drug_params_to_use->microfilaricidal_upsilon, -drug_params_to_use->microfilaricidal_kappa) : 0;
         const double male_load = male_worms.get_raw_load(person);
         const int base = person * compartments;
 
@@ -452,22 +468,36 @@ void MFPopulation::age(
     }
 }
 
+static int sample_negative_binomial(std::mt19937& gen, double size, double mu) {
+    // R's rnbinom(size=k, mu=μ) samples counts with mean μ and shape k
+    // Using the gamma-Poisson mixture representation:
+    // 1. Sample lambda from Gamma(shape=k, scale=μ/k)
+    // 2. Sample count from Poisson(lambda)
+    std::gamma_distribution<double> gamma_dist(size, mu / size);
+    double lambda = gamma_dist(gen);
+    std::poisson_distribution<int> poisson_dist(lambda);
+    return poisson_dist(gen);
+}
+
 double MFPopulation::get_skin_snip_load_person(
     std::mt19937& gen, int person_idx,
-    int skin_snip_weight, int num_skin_snips
+    int skin_snip_weight, int num_skin_snips,
+    double female_worm_load
 ) {
     double mf_load = get_raw_load(person_idx);
-    if (mf_load == 0.0)
+    if (mf_load == 0.0) {
         return 0.0;
+    }
     double kmf_to_use = kmf_const;
-    // TODO: if (!use_kmf_const)...
+    
+    if (!use_kmf_const) {
+        kmf_to_use = slope_kmf * female_worm_load + initial_kmf;
+    }
 
     double skin_snip_load = 0.0;
     double mu = skin_snip_weight * mf_load;
-    double p = kmf_to_use / (kmf_to_use + mu);
-    std::negative_binomial_distribution<int> skin_snip_dist(kmf_to_use, p);
     for (int snip = 0; snip < num_skin_snips; ++snip) {
-        skin_snip_load += skin_snip_dist(gen);
+        skin_snip_load += sample_negative_binomial(gen, kmf_to_use, mu);//skin_snip_dist(gen);
     }
     return (double)skin_snip_load / (skin_snip_weight * num_skin_snips);
 }
