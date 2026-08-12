@@ -6,6 +6,7 @@
 #include "interventions.hpp"
 #include <memory>
 #include <vector>
+#include <functional>
 
 struct StateSummary {
     int total_individuals = 0;

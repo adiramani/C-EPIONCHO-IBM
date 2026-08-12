@@ -1,23 +1,30 @@
-CXX = g++
-CXXFLAGS = -std=c++17 -O3 -march=native
-DEBUG_FLAGS = -std=c++17 -g -Wall -Wextra
-
 SRC = $(wildcard epioncho_ibm/*.cpp)
 BIN = c-epioncho-ibm
 
-ifeq ($(OPENMP),1)
+OSNAME := $(shell uname -s)
 
+ifeq ($(OSNAME),Linux)
+    PLATFORM ?= linux
+else
+    PLATFORM ?= macos
+endif
+
+ifeq ($(PLATFORM),macos)
     CXX = /opt/homebrew/opt/llvm/bin/clang++
+    CXXFLAGS = -std=c++17 -O3 -march=native -fopenmp -isysroot $(shell xcrun --show-sdk-path)
+    DEBUG_FLAGS = -std=c++17 -g -Wall -Wextra -fopenmp -isysroot $(shell xcrun --show-sdk-path)
+endif
 
-#     OMP_INC = /opt/homebrew/opt/libomp/include
-#     OMP_LIB = /opt/homebrew/opt/libomp/lib
+ifeq ($(PLATFORM),linux)
+    CXX = g++
+    CXXFLAGS = -std=c++17 -O3 -march=skylake -fopenmp
+    DEBUG_FLAGS = -std=c++17 -g -Wall -Wextra -fopenmp
 
-    CXXFLAGS += -fopenmp -isysroot $(shell xcrun --show-sdk-path)
-    DEBUG_FLAGS += -fopenmp
+	GCC_MODULE := GCC/15.2.0
 
-#     CPPFLAGS += -I$(OMP_INC)
-#     LDFLAGS += -L$(OMP_LIB) -lomp
-
+    SHELL := /bin/bash
+    .SHELLFLAGS := -ec
+    $(shell module load $(GCC_MODULE))
 endif
 
 all: $(BIN)
