@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include "enums.hpp"
 #include <memory>
+#include <cmath>
 
 // -------------------- Sequelae Parameters --------------------
 struct SequelaeParams {
@@ -359,6 +360,8 @@ struct BlackflyParams {
     double initial_L2 = 0.03;
     double initial_L1 = 0.03;
     double human_blood_index = 0.63;
+    double x1 = -1;
+    double hbi_lb = 0.63;
     double gonotrophic_cycle_length = 1.0 / 104.0;
     double c_h; // = 0.004900419;
     double bite_rate_per_person_per_year = 1000.0;

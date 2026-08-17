@@ -163,8 +163,16 @@ void Model::advance_timestep(bool verbose) {
         worm_sex_time += get_elapsed_time(start);
         start = clock();
     }
+    double hbi = state.params.blackfly.human_blood_index;
+    if (state.params.blackfly.x1 > 0) {
+        hbi = std::max(
+            std::exp(std::log(state.params.blackfly.human_blood_index) - state.params.blackfly.x1 * bite_rate),
+            state.params.blackfly.hbi_lb
+        );
+    }
+
     const double beta = (
-        state.params.blackfly.human_blood_index
+        hbi
         / state.params.blackfly.gonotrophic_cycle_length
     );
     state.people.new_established_l3(
