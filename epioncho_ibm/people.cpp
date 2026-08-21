@@ -276,6 +276,7 @@ std::vector<double> People::get_exposure(
     std::vector<double> age_sex_exp(population_size);
     double tmp_alpha_m = 0.0, tmp_alpha_f = 0.0;
 
+#pragma omp simd
     for (int i = 0; i < population_size; ++i) {
         if (exp_param.use_onchosim_exposure) {
             if (!sex[i]) {
@@ -303,7 +304,7 @@ std::vector<double> People::get_exposure(
     if (!exp_param.use_onchosim_exposure) {
         const double male_scale = exp_males / (tmp_alpha_m / n_males);
         const double female_scale = exp_females / (tmp_alpha_f / n_females);
-
+#pragma omp simd
         for (int i = 0; i < population_size; ++i)
             age_sex_exp[i] *= sex[i] ? female_scale : male_scale;
     }
@@ -312,7 +313,8 @@ std::vector<double> People::get_exposure(
         std::accumulate(exposure_heterogeneity.begin(), exposure_heterogeneity.end(), 0.0)
         / population_size
     );
-    
+
+#pragma omp simd
     for (int i = 0; i < population_size; ++i)
         age_sex_exp[i] *= exposure_heterogeneity[i] / mean_het;
 
@@ -503,6 +505,7 @@ void People::age(
     start = clock();
 
     // Increment ages
+#pragma omp simd
     for (double& a : ages)
         a += timestep_years;
     age_timers[7] += get_elapsed_time(start);

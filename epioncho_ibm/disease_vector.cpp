@@ -59,6 +59,7 @@ BlackflyPopulation::BlackflyPopulation(
     tou_v(params.l1_delay)
 {
     // Set the exposure heterogeneity to the initial value
+#pragma omp simd collapse(2)
     for (int p = 0; p < n_people_; ++p) {
         for (int s = 0; s < delay_size; ++s)
             delay_exposure[p * delay_size + s] = exposure_heterogeneity[p];
