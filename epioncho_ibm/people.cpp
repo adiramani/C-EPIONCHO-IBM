@@ -505,7 +505,6 @@ void People::age(
     start = clock();
 
     // Increment ages
-#pragma omp simd
     for (double& a : ages)
         a += timestep_years;
     age_timers[7] += get_elapsed_time(start);
