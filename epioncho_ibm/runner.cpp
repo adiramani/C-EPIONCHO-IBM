@@ -1,6 +1,7 @@
 #include "model.hpp"
 #include "model_outputs.hpp"
 #include "oncho_params.hpp"
+#include "progress_tracker.hpp"
 #include <cstdio>
 #include <ctime>
 #include <sstream>
@@ -54,6 +55,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Starting Simulations for kE: " << k_E << " ABR: " << abr << "\n";
     std::vector<ModelOutputs> final_model_outputs;
     double overall_start = omp_get_wtime();
+
+    ProgressTracker progress(repeats, total_years);
 #pragma omp parallel for
     for (int seed = 1; seed <= repeats; ++seed) {
         clock_t start = clock();
@@ -183,6 +186,9 @@ int main(int argc, char* argv[]) {
                     mo.update(model.state);
             }
             model.advance_timestep(verbose);
+            // if (model.state.current_year == std::floor(model.state.current_year)) {
+            //     progress.report_year(seed, model.state.current_year);
+            // }
         }
 #pragma omp critical
 {
@@ -193,6 +199,7 @@ int main(int argc, char* argv[]) {
             printf("Model runtime: %f\n", model.overall_time);
             printf("Total runtime: %f\n", get_elapsed_time(start));
         }
+        progress.report_complete(seed);
     }
 
     std::ostringstream oss;
@@ -205,6 +212,7 @@ int main(int argc, char* argv[]) {
     }
 
     printf("Overall Model Runtime: %f\n", get_elapsed_time_omp(overall_start));
+    progress.report_final();
 
     return 0;
 }
