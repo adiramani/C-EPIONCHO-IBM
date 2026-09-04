@@ -23,12 +23,20 @@ struct StateSummary {
     int raw_ov16_seropositives = 0;
     int adjusted_ov16_seropositives = 0;
     int num_never_treated = 0;
+    double anti_ov16_test_sens = 0.80;
+    double anti_ov16_test_spec = 0.99;
+    
     std::vector<SequelaeType> active_sequelae = {};
     std::vector<int> sequelae_positives = {};
 
     StateSummary() = default;
-    StateSummary(std::vector<SequelaeType> active_sequelae)
-    : active_sequelae(active_sequelae),
+    StateSummary(
+        std::vector<SequelaeType> active_sequelae,
+        double anti_ov16_test_sens, double anti_ov16_test_spec
+    )
+    : anti_ov16_test_sens(anti_ov16_test_sens),
+      anti_ov16_test_spec(anti_ov16_test_spec),
+      active_sequelae(active_sequelae),
       sequelae_positives(active_sequelae.size(), 0)
     {}
 
@@ -86,7 +94,7 @@ class State {
 
         double mf_prevalence(const std::vector<int>& filtered_individuals, int incubation_time_hours = 24);
 
-        void update_state_summary(const std::vector<int>& filtered_individuals, StateSummary& summary, double sens = 0.60, double spec = 0.969);
+        void update_state_summary(const std::vector<int>& filtered_individuals, StateSummary& summary);
 };
 
 #endif

@@ -55,7 +55,7 @@ double State::mf_prevalence(const std::vector<int>& filtered_individuals, int in
     return total_prevalence / filtered_individuals.size();
 }
 
-void State::update_state_summary(const std::vector<int>& filtered_individuals, StateSummary& summary, double sens, double spec) {
+void State::update_state_summary(const std::vector<int>& filtered_individuals, StateSummary& summary) {
     summary.total_individuals = filtered_individuals.size();
     for (auto& indiv : filtered_individuals) {
         summary.pop_male_worm_load += people.male_worms.get_raw_load(indiv);
@@ -79,7 +79,7 @@ void State::update_state_summary(const std::vector<int>& filtered_individuals, S
         summary.skin_snip_positives += skin_snip_mf_count > 0;
 
         summary.raw_ov16_seropositives += people.ov16_serostatus[indiv];
-        summary.adjusted_ov16_seropositives += people.sample_serostatus_individual(indiv, sens, spec);
+        summary.adjusted_ov16_seropositives += people.sample_serostatus_individual(indiv, summary.anti_ov16_test_sens, summary.anti_ov16_test_spec);
 
         for (size_t s = 0; s < people.sequelae.size(); ++s) {
             summary.sequelae_positives[s] += people.sequelae[s]->indiv_status(indiv);

@@ -489,16 +489,22 @@ struct OutputInfo {
     int end_age = 80;
     int year_label_start = 0;
 
+    double anti_ov16_test_sens = 0.80;
+    double anti_ov16_test_spec = 0.80;
+
     OutputInfo(
         double end_time_years, double start_time_years = 0,
         double interval_years = 1.0,
         int start_age = 0, int end_age = 80,
         int year_label_start = 0,
+        double anti_ov16_test_sens = 0.80, double anti_ov16_test_spec = 0.99,
         std::vector<ModelOutputOption> outputs_to_track = {ModelOutputOption::mf_prevalence, ModelOutputOption::adjusted_ov16_seroprevalence}
     )
     : outputs_to_track(outputs_to_track),
       start_age(start_age), end_age(end_age),
-      year_label_start(year_label_start)
+      year_label_start(year_label_start),
+      anti_ov16_test_sens(anti_ov16_test_sens), 
+      anti_ov16_test_spec(anti_ov16_test_spec)
     {
         for (double t = start_time_years; t < end_time_years; t += interval_years) {
             output_time_years.push_back(t);
@@ -510,12 +516,15 @@ struct OutputInfo {
         std::vector<double> output_time_years,
         int start_age = 0, int end_age = 80,
         int year_label_start = 0,
+        double anti_ov16_test_sens = 0.80, double anti_ov16_test_spec = 0.99,
         std::vector<ModelOutputOption> outputs_to_track = {ModelOutputOption::mf_prevalence, ModelOutputOption::adjusted_ov16_seroprevalence}
     )
     : outputs_to_track(outputs_to_track),
       output_time_years(output_time_years),
       start_age(start_age), end_age(end_age),
-      year_label_start(year_label_start)
+      year_label_start(year_label_start),
+      anti_ov16_test_sens(anti_ov16_test_sens), 
+      anti_ov16_test_spec(anti_ov16_test_spec)
     {}
 };
 

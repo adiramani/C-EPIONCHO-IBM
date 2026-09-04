@@ -49,7 +49,9 @@ void ModelOutputs::update(State& state) {
     std::vector<SequelaeType> active_sequelae(num_sequelae);
     for (int i = 0; i < num_sequelae; ++i)
         active_sequelae[i] = state.people.sequelae[i]->get_type();
-    StateSummary summary = StateSummary(active_sequelae);
+    StateSummary summary = StateSummary(
+        active_sequelae, output_info.anti_ov16_test_sens, output_info.anti_ov16_test_spec
+    );
     state.update_state_summary(inds, summary);
     for(size_t i = 0; i < output_info.outputs_to_track.size(); ++i) {
         ModelOutputOption curr_type = output_info.outputs_to_track[i];
