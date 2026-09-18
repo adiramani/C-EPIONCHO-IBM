@@ -60,34 +60,6 @@ void ModelOutputs::update(State& state) {
     output_index++;
 }
 
-static std::string output_types_to_string(ModelOutputOption metric) {
-    switch (metric) {
-        case ModelOutputOption::population_size: return "population_size";
-        case ModelOutputOption::mf_prevalence: return "mf_prevalence";
-        case ModelOutputOption::true_ov16_seroprevalence: return "true_ov16_seroprevalence";
-        case ModelOutputOption::adjusted_ov16_seroprevalence: return "adjusted_ov16_seroprevalence";
-        case ModelOutputOption::mf_intensity: return "mf_intensity";
-        case ModelOutputOption::worm_load: return "mean_worm_load";
-        case ModelOutputOption::male_worm_load: return "mean_male_worm_load";
-        case ModelOutputOption::female_worm_load: return "mean_female_worm_load";
-        case ModelOutputOption::fertile_female_worm_load: return "mean_fertile_female_worm_load";
-        case ModelOutputOption::infertile_female_worm_load: return "mean_infertile_female_worm_load";
-        case ModelOutputOption::perm_sterile_female_worm_load: return "mean_perm_sterile_female_worm_load";
-        case ModelOutputOption::compliance_percent: return "never_treated_percent";
-        case ModelOutputOption::severe_itch_prevalence: return "severe_itch_prevalence";
-        case ModelOutputOption::rsd_prevalence: return "rsd_prevalence";
-        case ModelOutputOption::atrophy_prevalence: return "atrophy_prevalence";
-        case ModelOutputOption::hanging_groin_prevalence: return "hanging_groin_prevalence";
-        case ModelOutputOption::depigmentation_prevalence: return "depigmentation_prevalence";
-        case ModelOutputOption::blindness_prevalence: return "blindness_prevalence";
-        case ModelOutputOption::visual_impairment_prevalence: return "visual_impairment_prevalence";
-        case ModelOutputOption::oae_prevalence: return "oae_prevalence";
-        case ModelOutputOption::l3_per_blackfly: return "l3_per_blackfly";
-        case ModelOutputOption::l3_prevalence_blackflies: return "l3_prevalence_blackflies";
-        default: return "unknown";
-    }
-}
-
 void ModelOutputs::write(const std::string& path, bool update) const {
     std::ofstream f;
 

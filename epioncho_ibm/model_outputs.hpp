@@ -3,6 +3,7 @@
 
 #include "params.hpp"
 #include "state.hpp"
+#include "tools/tools.hpp"
 
 class ModelOutputs {
     private:

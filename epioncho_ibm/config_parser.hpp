@@ -2,6 +2,7 @@
 #define CONFIG_PARSER_HPP
 
 #include <nlohmann/json.hpp>
+#include "tools/tools.hpp"
 #include "params.hpp"
 #include "oncho_params.hpp"
 #include <fstream>
@@ -50,57 +51,6 @@ public:
 
 std::map<std::string, DrugParams> DrugRegistry::existing_drugs;
 bool DrugRegistry::initialized = false;
-
-class Validator {
-public:
-    template <typename T>
-    static void validate_in_array(T value, std::vector<T> valid_values, const std::string& param_name) {
-        if (std::find(valid_values.begin(), valid_values.end(), value) == valid_values.end()) {
-            throw std::invalid_argument(
-                param_name + " input value of " + std::to_string(value) +
-                "is not valid."
-            );
-        }
-    }
-
-    static void validate_range(double value, double min_val, double max_val, const std::string& param_name, bool inclusive = true) {
-        bool invalid = inclusive ? (value < min_val || value > max_val) : (value <= min_val || value >= max_val);
-        if (invalid) {
-            throw std::invalid_argument(
-                param_name + " must be in range [" + std::to_string(min_val) + ", " + 
-                std::to_string(max_val) + "], got " + std::to_string(value)
-            );
-        }
-    }
-
-    static void validate_positive(double value, const std::string& param_name) {
-        if (value <= 0) {
-            throw std::invalid_argument(param_name + " must be positive, got " + std::to_string(value));
-        }
-    }
-
-    static void validate_non_negative(double value, const std::string& param_name) {
-        if (value < 0) {
-            throw std::invalid_argument(param_name + " must be non-negative, got " + std::to_string(value));
-        }
-    }
-
-    static void validate_positive_int(int value, const std::string& param_name) {
-        if (value <= 0) {
-            throw std::invalid_argument(param_name + " must be positive, got " + std::to_string(value));
-        }
-    }
-
-    static void validate_non_negative_int(int value, const std::string& param_name) {
-        if (value < 0) {
-            throw std::invalid_argument(param_name + " must be non-negative, got " + std::to_string(value));
-        }
-    }
-
-    static void validate_probability(double value, const std::string& param_name = "probability") {
-        validate_range(value, 0.0, 1.0, param_name);
-    }
-};
 
 DrugParams parse_drug_from_json(const json& drug_json) {
     DrugParams drug;
@@ -357,9 +307,39 @@ std::vector<VectorControlParams> parse_vector_control_from_json(const json& vc_j
     return vector_controls;
 }
 
+struct ModelRuntimeInfo {
+public:
+    int total_years;
+    int num_cores;
+    int num_repeats;
+};
+
+
+struct FullModelConfig {
+public:
+    std::string simulation_name = "Config";
+    InputParams input_params;
+    std::vector<OutputInfo> output_infos;
+    ModelRuntimeInfo runtime_info;
+
+    FullModelConfig() = default;
+    FullModelConfig(const FullModelConfig& other) = default;
+    FullModelConfig& operator=(const FullModelConfig&) = default;
+
+    FullModelConfig(FullModelConfig&&) = default;
+    FullModelConfig& operator=(FullModelConfig&&) = default;
+
+    FullModelConfig(InputParams& ip, std::vector<OutputInfo>& oi, ModelRuntimeInfo ri, const std::string& name = "Config")
+    : simulation_name(name),
+      input_params(ip),
+      output_infos(oi),
+      runtime_info(ri)
+    {}
+};
+
 class ConfigParser {
 public:
-    static InputParams parse_config_file(const std::string& filename) {
+    static FullModelConfig parse_config_file(const std::string& filename) {
         std::ifstream config_file(filename);
         if (!config_file.is_open()) {
             throw std::runtime_error("Cannot open config file: " + filename);
@@ -372,10 +352,47 @@ public:
             throw std::runtime_error("JSON parse error in " + filename + ": " + e.what());
         }
 
-        return parse_config_json(config);
+        std::string sim_name = config.value("name", "Config");
+
+        json model_params;
+        if (config.contains("model_params")) {
+            model_params = config["model_params"];   
+        }
+        InputParams ip = parse_param_config_json(model_params);
+        
+        json output_params;
+        if (config.contains("output_params")) {
+            output_params = config["output_params"];   
+            if (!output_params.is_array()) {
+                throw std::invalid_argument("output_params must be an array");
+            }
+        }
+        std::vector<OutputInfo> ois;
+        for (auto& output_config : output_params) {
+            ois.push_back(parse_output_config_json(output_config));
+        }
+        
+        json runtime_params;
+        if (config.contains("runtime_params")) {
+            runtime_params = config["runtime_params"];
+        }
+        ModelRuntimeInfo ri = parse_runtime_info_config_json(runtime_params);
+
+        return FullModelConfig(ip, ois, ri, sim_name);
     }
 
-    static InputParams parse_config_json(const json& config) {
+    static ModelRuntimeInfo parse_runtime_info_config_json(const json& runtime_config) {
+        ModelRuntimeInfo ro;
+        ro.total_years = runtime_config.value("total_years", 100);
+        Validator::validate_non_negative_int(ro.total_years, "total_years");
+        ro.num_cores = runtime_config.value("num_cores", 1);
+        Validator::validate_non_negative_int(ro.num_cores, "num_cores");
+        ro.num_repeats = runtime_config.value("num_repeats", 1);
+        Validator::validate_non_negative_int(ro.num_repeats, "num_repeats");
+        return ro;
+    }
+
+    static InputParams parse_param_config_json(const json& config) {
         Params params;
 
         if (config.contains("base")) {
@@ -568,7 +585,99 @@ public:
             vector_controls = parse_vector_control_from_json(config["vector_control"]);
         }
 
-        return InputParams(std::move(params), treatments, vector_controls);
+        return InputParams(params, treatments, vector_controls);
+    }
+
+    static OutputInfo parse_output_config_json(const json& output_config) {
+        double end_time_years = -1;
+        double start_time_years = -1;
+        double interval_years = -1;
+        std::vector<double> output_time_years;
+        int start_age;
+        int end_age;
+        int year_label_start;
+        double anti_ov16_test_sens;
+        double anti_ov16_test_spec;
+        std::vector<ModelOutputOption> model_outputs_to_track;
+
+        if (output_config.contains("end_time_years")) {
+            end_time_years = output_config["end_time_years"].get<double>();
+            Validator::validate_non_negative(end_time_years, "end_time_years");
+        }
+        if (output_config.contains("start_time_years")) {
+            start_time_years = output_config["start_time_years"].get<double>();
+            Validator::validate_non_negative(start_time_years, "start_time_years");
+        }
+        if (output_config.contains("interval_years")) {
+            interval_years = output_config["interval_years"].get<double>();
+            Validator::validate_non_negative(interval_years, "interval_years");
+        }
+        if (output_config.contains("output_time_years")) {
+            output_time_years = output_config["interval_years"].get<std::vector<double>>();
+            for (double t : output_time_years) {
+                Validator::validate_non_negative(t, "output_time_year");
+            }
+        }
+        if ((end_time_years > 0 || start_time_years > 0 || interval_years > 0) && (output_time_years.size() > 0)) {
+            throw std::invalid_argument(
+                "Either 'end_time_years, start_time_years, and interval_years' should be specified or "
+                "'output_time_years' should be specified, not all."
+            );
+        } else if ((end_time_years < 0 || start_time_years < 0 || interval_years < 0) && output_time_years.size() == 0) {
+            throw std::invalid_argument(
+                "Either 'end_time_years, start_time_years, and interval_years' should be specified or "
+                "'output_time_years' should be specified."
+            );
+        }
+
+        start_age = output_config.value("start_age", 5);
+        Validator::validate_non_negative_int(start_age, "start_age");
+        end_age = output_config.value("end_age", 81);
+        Validator::validate_non_negative_int(end_age, "end_age");
+
+        year_label_start = output_config.value("year_label_start", 0);
+        Validator::validate_non_negative(year_label_start, "year_label_start");
+
+        anti_ov16_test_sens = output_config.value("anti_ov16_test_sens", 0.80);
+        Validator::validate_probability(anti_ov16_test_sens, "anti_ov16_test_sens");
+        anti_ov16_test_spec = output_config.value("anti_ov16_test_spec", 0.99);
+        Validator::validate_probability(anti_ov16_test_spec, "anti_ov16_test_spec");
+
+        if (output_config.contains("outputs_to_track")) {
+            for (auto& output_metric : output_config["outputs_to_track"].get<std::vector<std::string>>()) {
+                model_outputs_to_track.push_back(
+                    string_to_output_types(output_metric)
+                );
+            }
+            if (model_outputs_to_track.size() == 0) {
+                model_outputs_to_track = {string_to_output_types("mf_prevalence"), string_to_output_types("adjusted_ov16_seroprevalence")};
+            }
+        }
+
+        if (output_time_years.size() > 0) {
+            return OutputInfo(
+                output_time_years,
+                start_age, end_age,
+                year_label_start,
+                anti_ov16_test_sens, anti_ov16_test_spec,
+                model_outputs_to_track
+            );
+        }
+
+        if (end_time_years <= start_time_years) {
+            throw std::invalid_argument(
+                "End_time_years " + std::to_string(end_time_years) + 
+                " should be greater than start_time_years " + std::to_string(start_time_years) + "."
+            );
+        }
+
+        return OutputInfo(
+            end_time_years, start_time_years,
+            interval_years, start_age, end_age,
+            year_label_start,
+            anti_ov16_test_sens, anti_ov16_test_spec,
+            model_outputs_to_track
+        );
     }
 };
 

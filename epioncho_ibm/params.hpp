@@ -488,7 +488,7 @@ struct OutputInfo {
     int year_label_start = 0;
 
     double anti_ov16_test_sens = 0.80;
-    double anti_ov16_test_spec = 0.80;
+    double anti_ov16_test_spec = 0.99;
 
     OutputInfo(
         double end_time_years, double start_time_years = 0,

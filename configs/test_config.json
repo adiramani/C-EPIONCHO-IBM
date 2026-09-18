@@ -1,50 +1,213 @@
 {
-    "base": {
-        "seed": 1,
-        "n_people": 1000,
-        "k_E": 0.3,
-        "delta_time_days": 0.5
+    "name": "Test Config",
+    "runtime_params": {
+        "total_years": 127,
+        "num_cores": 10,
+        "num_repeats": 10
     },
-    "human": {
-        "prop_serorevert_fast": 0.25
+    "model_params": {
+        "base": {
+            "seed": 1,
+            "n_people": 1000,
+            "k_E": 0.3,
+            "delta_time_days": 0.5
+        },
+        "human": {
+            "prop_serorevert_fast": 0.25
+        },
+        "exposure": {
+            "use_onchosim_exposure": false
+        },
+        "mf": {
+            "use_kmf_const": false
+        },
+        "blackfly": {
+            "bite_rate_per_person_per_year": 1000.0
+        },
+        "treatments": [
+            {
+                "name": "IVM",
+                "start_year": 100,
+                "end_year": 120,
+                "interval_years": 1,
+                "coverage": 0.68,
+                "rho": 0.2,
+                "drugs": [{"name": "IVM"}]
+            },
+            {
+                "name": "MOX",
+                "start_year": 121,
+                "end_year": 127,
+                "interval_years": 0.5,
+                "coverage": 0.79,
+                "rho": 0.2,
+                "drugs": [{"name": "MOX"}]
+            }
+        ],
+        "vector_control": [
+            {
+                "name": "larviciding",
+                "start_year": 100,
+                "end_year": 115,
+                "efficacies": [
+                    0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.64, 0.48, 0.32, 0.16, 0
+                ]
+            }
+        ]
     },
-    "exposure": {
-        "use_onchosim_exposure": false
-    },
-    "mf": {
-        "use_kmf_const": false
-    },
-    "blackfly": {
-        "bite_rate_per_person_per_year": 1000
-    },
-    "treatments": [
+    "output_params": [
         {
-            "name": "IVM",
-            "start_year": 87,
-            "end_year": 120,
-            "interval_years": 1,
-            "coverage": 0.68,
-            "rho": 0.2,
-            "drugs": [{"name": "IVM"}]
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 5,
+            "end_age": 81,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
         },
         {
-            "name": "MOX",
-            "start_year": 121,
-            "end_year": 127,
-            "interval_years": 0.5,
-            "coverage": 0.79,
-            "rho": 0.2,
-            "drugs": [{"name": "MOX"}]
-        }
-    ],
-    "vector_control": [
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 0,
+            "end_age": 5,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
         {
-            "name": "larviciding",
-            "application_years": [
-                86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100
-            ],
-            "efficacies": [
-                0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.64, 0.48, 0.32, 0.16, 0
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 5,
+            "end_age": 10,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 10,
+            "end_age": 15,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 15,
+            "end_age": 20,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 20,
+            "end_age": 30,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 30,
+            "end_age": 40,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 40,
+            "end_age": 50,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 50,
+            "end_age": 60,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 60,
+            "end_age": 70,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
+            ]
+        },
+        {
+            "end_time_years": 127,
+            "start_time_years": 50,
+            "interval_years": 1.0,
+            "start_age": 70,
+            "end_age": 81,
+            "year_label_start": 1900,
+            "anti_ov16_test_sens": 0.80,
+            "anti_ov16_test_spec": 0.99,
+            "outputs_to_track": [
+                "mf_intensity", "mf_prevalence", "population_size", "true_ov16_seroprevalence", 
+                "adjusted_ov16_seroprevalence", "l3_per_blackfly", "l3_prevalence_blackflies"
             ]
         }
     ]

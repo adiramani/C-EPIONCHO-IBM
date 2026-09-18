@@ -11,6 +11,8 @@
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
+#include <string>
+#include <iostream>
 
 namespace fs = std::filesystem;
 
@@ -133,7 +135,7 @@ int main(int argc, char* argv[]) {
     std::string config_path = "";
     bool verbose = false;
     double k_E = 0.3;
-    double abr = 1000;
+    double abr = 1000.0;
     int repeats = 10;
     int total_years = 100;
     std::string output_folder = "test_final_output/";
@@ -141,8 +143,6 @@ int main(int argc, char* argv[]) {
     bool delete_temp_after_processing = true;
     bool enable_timing = false;
     bool onchosim_exposure = false;
-    bool use_60_sens = false;
-    bool include_treatments = false;
     int n_cores = 1;
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--config") {
@@ -183,8 +183,6 @@ int main(int argc, char* argv[]) {
             if (i + 1 >= argc)
                 return 1;
             onchosim_exposure = std::string(argv[++i]) == "onchosim";
-        } else if (std::string(argv[i]) == "--include-treatments") {
-            include_treatments = true;
         } else if (std::string(argv[i]) == "--n-cores") {
             if (i + 1 >= argc)
                 return 1;
@@ -196,23 +194,38 @@ int main(int argc, char* argv[]) {
     }
 
     check_output_paths(temporary_output_folder, output_folder);
-
-    std::cout << "Starting Simulations for kE: " << k_E << " ABR: " << abr << " onchosim exposure: " << onchosim_exposure << " include treatments: " << include_treatments << "\n";
     double overall_start = omp_get_wtime();
-    int repeats_per_process = repeats / n_cores;
 
-    InputParams input_params;
-    bool loaded_input_params = false;
+    FullModelConfig model_config;
+    bool loaded_params = false;
+    std::string simulation_name = "Command line args";
+    std::string simulation_name_for_output = simulation_name;
     if (config_path != "") {
-        std::cout << "Loading configuration from: " << config_path << "\n";
+        std::cout << "Loading configuration from: " << config_path << " ... ";
         try {
-            input_params = ConfigParser::parse_config_file(config_path);
-            loaded_input_params = true;
+            model_config = ConfigParser::parse_config_file(config_path);
+            loaded_params = true;
         } catch (const std::exception& e) {
             std::cerr << "Error loading config: " << e.what() << "\n";
             return 1;
         }
+        std::cout << "Finished.\n";
+        if (model_config.runtime_info.num_cores > 0) {
+            n_cores = model_config.runtime_info.num_cores;
+            std::cout << "Using num_cores set in config: " << n_cores << ".\n";
+        }
+        if (model_config.runtime_info.num_repeats > 0) {
+            repeats = model_config.runtime_info.num_repeats;
+        }
+        simulation_name = model_config.simulation_name;
+        simulation_name_for_output = simulation_name;
     }
+    std::replace(simulation_name_for_output.begin(), simulation_name_for_output.end(), ' ', '_');
+    std::transform(simulation_name_for_output.begin(), simulation_name_for_output.end(), simulation_name_for_output.begin(), ::tolower);
+
+    int repeats_per_process = repeats / n_cores;
+    std::cout << "Starting " << simulation_name << " Simulations with " << repeats << " repeats and " << n_cores << " cores.\n";
+
 
     for (int i = 0; i < n_cores; ++i) {
         pid_t pid = fork();
@@ -227,7 +240,8 @@ int main(int argc, char* argv[]) {
                 clock_t start = clock();
 
                 InputParams input_params_seed;
-                if (!loaded_input_params) {
+                std::vector<ModelOutputs> all_model_outputs;
+                if (!loaded_params) {
                     Params parameters;
                     parameters.base.seed = true_seed;
                     parameters.base.k_E = k_E;
@@ -239,68 +253,59 @@ int main(int argc, char* argv[]) {
                         {}, 
                         {}
                     );
+                    std::vector<ModelOutputOption> all_outputs = {
+                        ModelOutputOption::mf_intensity, 
+                        ModelOutputOption::mf_prevalence, 
+                        ModelOutputOption::population_size, 
+                        ModelOutputOption::true_ov16_seroprevalence,
+                        ModelOutputOption::adjusted_ov16_seroprevalence,
+                        ModelOutputOption::l3_per_blackfly,
+                        ModelOutputOption::l3_prevalence_blackflies
+                    };
+
+                    std::vector<int> age_starts = {
+                        5, 0, 5, 10, 15, 20, 30, 40, 50, 60, 70
+                    };
+                    std::vector<int> age_ends = {
+                        81, 5, 10, 15, 20, 30, 40, 50, 60, 70, 81
+                    };
+
+                    for (size_t a = 0; a < age_starts.size(); ++a) {
+                        double interval = 1.0;
+                        all_model_outputs.push_back(
+                            ModelOutputs(
+                                OutputInfo(
+                                    total_years, 50.0, interval,
+                                    age_starts[a], age_ends[a],
+                                    1900, 0.80, 0.99,
+                                    all_outputs
+                                ),
+                                true_seed
+                            )
+                        );
+                    }
                 } else {
-                    Params loaded_parameters = input_params.params;
+                    Params loaded_parameters = model_config.input_params.params;
                     loaded_parameters.base.seed = true_seed;
                     input_params_seed = InputParams(
                         loaded_parameters,
-                        input_params.treatments,
-                        input_params.vector_control
+                        model_config.input_params.treatments,
+                        model_config.input_params.vector_control
                     );
+                    for (auto& output_info : model_config.output_infos) {
+                        all_model_outputs.push_back(
+                            ModelOutputs(
+                                output_info,
+                                true_seed
+                            )
+                        );
+                    }
+                    total_years = model_config.runtime_info.total_years;
                 }
 
                 const int total_timesteps = (input_params_seed.params.base.year_length_days / input_params_seed.params.base.delta_time_days) * total_years;
                 
                 Model model(std::move(input_params_seed), enable_timing);
-
-
-                std::vector<ModelOutputOption> all_outputs = {
-                    ModelOutputOption::mf_intensity, 
-                    ModelOutputOption::mf_prevalence, 
-                    ModelOutputOption::population_size, 
-                    ModelOutputOption::true_ov16_seroprevalence,
-                    ModelOutputOption::adjusted_ov16_seroprevalence,
-                    ModelOutputOption::worm_load,
-                    ModelOutputOption::female_worm_load,
-                    ModelOutputOption::male_worm_load,
-                    // ModelOutputOption::fertile_female_worm_load,
-                    // ModelOutputOption::infertile_female_worm_load,
-                    // ModelOutputOption::perm_sterile_female_worm_load,
-                    // ModelOutputOption::compliance_percent,
-                    // ModelOutputOption::severe_itch_prevalence,
-                    // ModelOutputOption::rsd_prevalence,
-                    // ModelOutputOption::atrophy_prevalence,
-                    // ModelOutputOption::hanging_groin_prevalence,
-                    // ModelOutputOption::depigmentation_prevalence,
-                    // ModelOutputOption::blindness_prevalence,
-                    // ModelOutputOption::visual_impairment_prevalence,
-                    // ModelOutputOption::oae_prevalence,
-                    ModelOutputOption::l3_per_blackfly,
-                    ModelOutputOption::l3_prevalence_blackflies
-                };
-
-                std::vector<int> age_starts = {
-                    5, 12, 0, 5, 10, 15, 20, 30, 40, 50, 60, 70
-                };
-                std::vector<int> age_ends = {
-                    81, 81, 5, 10, 15, 20, 30, 40, 50, 60, 70, 81
-                };
-                std::vector<ModelOutputs> all_model_outputs;
-
-                for (size_t a = 0; a < age_starts.size(); ++a) {
-                    double interval = 1.0;
-                    all_model_outputs.push_back(
-                        ModelOutputs(
-                            OutputInfo(
-                                total_years, 50.0, interval,
-                                age_starts[a], age_ends[a],
-                                1900, 0.60, 0.969,
-                                all_outputs
-                            ),
-                            true_seed
-                        )
-                    );
-                }
 
                 for (int i = 0; i < total_timesteps; ++i) {
                     for (auto& mo : all_model_outputs) {
@@ -318,7 +323,8 @@ int main(int argc, char* argv[]) {
                 }
 
                 std::ostringstream oss;
-                oss << temporary_output_folder << "tmp_output_abr_" << abr << "_kE_" << k_E << "_" << true_seed << ".csv";
+
+                oss << temporary_output_folder << "tmp_output_" << simulation_name_for_output << "_" << true_seed << ".csv";
                 printf("Writing output to %s\n", oss.str().c_str());
                 int iter = 0;
                 for (auto& mo : local_outputs) {
@@ -351,8 +357,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Merging output files...\n";
 
     std::string final_output_path = (
-        output_folder + "final_output_abr_" + std::to_string((int)abr) +
-        "_kE_" + std::to_string(k_E) + ".csv"
+        output_folder + "final_output_" + simulation_name_for_output + ".csv"
     );
 
     merge_output_csvs(temporary_output_folder, final_output_path, delete_temp_after_processing);
