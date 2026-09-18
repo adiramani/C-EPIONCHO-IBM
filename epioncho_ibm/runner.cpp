@@ -1,6 +1,6 @@
 #include "model.hpp"
 #include "model_outputs.hpp"
-#include "oncho_params.hpp"
+#include "config_parser.hpp"
 #include <cstdio>
 #include <ctime>
 #include <sstream>
@@ -38,7 +38,18 @@ void signal_handler(int sig) {
     exit(1);
 }
 
-void merge_output_csvs(const std::string& tmp_output_folder, const std::string& final_output_path) {
+void check_output_paths(const std::string& tmp_output_folder, const std::string& final_output_folder) {
+    if (!fs::exists(tmp_output_folder)) {
+        std::cout << "Directory " << tmp_output_folder << " does not exist. Creating it now.\n";
+        fs::create_directories(tmp_output_folder);
+    }
+    if (!fs::exists(final_output_folder)) {
+        std::cout << "Directory " << final_output_folder << " does not exist. Creating it now.\n";
+        fs::create_directories(final_output_folder);
+    }
+}
+
+void merge_output_csvs(const std::string& tmp_output_folder, const std::string& final_output_path, bool delete_temp_after_processing) {
     std::vector<std::string> csv_files;
     
     try {
@@ -102,6 +113,16 @@ void merge_output_csvs(const std::string& tmp_output_folder, const std::string& 
     
     merged.close();
     std::cout << "Successfully merged to: " << merged_file << "\n";
+    if (delete_temp_after_processing) {
+        std::cout << "Deleting temporary folder: " << tmp_output_folder << " ... ";
+        try {
+            fs::remove_all(tmp_output_folder);
+        } catch (const std::exception& e) {
+            std::cerr << "Error reading directory: " << e.what() << "\n";
+            return;
+        }
+        std::cout << "Finished\n";
+    }
 }
 
 // TODO: possibly use cxxopts for parsing params
@@ -109,20 +130,26 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
+    std::string config_path = "";
     bool verbose = false;
     double k_E = 0.3;
     double abr = 1000;
     int repeats = 10;
-    int n_cores = 1;
     int total_years = 100;
-    std::string output_folder = "";
-    std::string temporary_output_folder = "";
+    std::string output_folder = "test_final_output/";
+    std::string temporary_output_folder = "temp_output/";
+    bool delete_temp_after_processing = true;
     bool enable_timing = false;
-    bool use_benin_int_history = false;
-    int additional_treatment_years = 5;
-    std::string additional_treatment_name = "bIVM";
+    bool onchosim_exposure = false;
+    bool use_60_sens = false;
+    bool include_treatments = false;
+    int n_cores = 1;
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--verbose") {
+        if (std::string(argv[i]) == "--config") {
+            if (i + 1 >= argc)
+                return 1;
+            config_path = std::string(argv[++i]);
+        } else if (std::string(argv[i]) == "--verbose") {
             verbose = true;
         } else if (std::string(argv[i]) == "--kE") {
             if (i + 1 >= argc)
@@ -144,37 +171,48 @@ int main(int argc, char* argv[]) {
             if (i + 1 >= argc)
                     return 1;
             temporary_output_folder = std::string(argv[++i]);
+        } else if (std::string(argv[i]) == "--keep-tmp-folder") {
+            delete_temp_after_processing = false;
         } else if (std::string(argv[i]) == "--total-years") {
             if (i + 1 >= argc)
                 return 1;
             total_years = atoi(argv[++i]);
         } else if (std::string(argv[i]) == "--enable-timing") {
             enable_timing = true;
+        } else if (std::string(argv[i]) == "--exposure") {
+            if (i + 1 >= argc)
+                return 1;
+            onchosim_exposure = std::string(argv[++i]) == "onchosim";
+        } else if (std::string(argv[i]) == "--include-treatments") {
+            include_treatments = true;
         } else if (std::string(argv[i]) == "--n-cores") {
             if (i + 1 >= argc)
                 return 1;
             n_cores = atoi(argv[++i]);
-        } else if (std::string(argv[i]) == "--benin") {
-            use_benin_int_history = true;
-        } else if (std::string(argv[i]) == "--additional-trt-yrs") {
-            if (i + 1 >= argc)
-                return 1;
-            additional_treatment_years = atoi(argv[++i]);
-        } else if (std::string(argv[i]) == "--additional-trt-name") {
-            if (i + 1 >= argc)
-                return 1;
-            additional_treatment_name = std::string(argv[++i]);
-        } 
+        }
     }
     if (temporary_output_folder.length() == 0) {
         temporary_output_folder = output_folder;
     }
-    std::string country = "ghana";
-    if (use_benin_int_history)
-        country = "benin";
-    std::cout << "Starting Simulations for kE: " << k_E << " ABR: " << abr << "\n";
+
+    check_output_paths(temporary_output_folder, output_folder);
+
+    std::cout << "Starting Simulations for kE: " << k_E << " ABR: " << abr << " onchosim exposure: " << onchosim_exposure << " include treatments: " << include_treatments << "\n";
     double overall_start = omp_get_wtime();
     int repeats_per_process = repeats / n_cores;
+
+    InputParams input_params;
+    bool loaded_input_params = false;
+    if (config_path != "") {
+        std::cout << "Loading configuration from: " << config_path << "\n";
+        try {
+            input_params = ConfigParser::parse_config_file(config_path);
+            loaded_input_params = true;
+        } catch (const std::exception& e) {
+            std::cerr << "Error loading config: " << e.what() << "\n";
+            return 1;
+        }
+    }
 
     for (int i = 0; i < n_cores; ++i) {
         pid_t pid = fork();
@@ -184,211 +222,36 @@ int main(int argc, char* argv[]) {
         } else if (pid == 0) {
             for (int seed = 1; seed <= repeats_per_process; ++seed) {
                 std::vector<ModelOutputs> local_outputs;
-                
                 int true_seed = (seed-1) * n_cores + i;
+
                 clock_t start = clock();
-                Params parameters;
-                parameters.base.seed = true_seed;
-                parameters.base.n_people = 500;
-                parameters.base.k_E = k_E;
-                parameters.blackfly.bite_rate_per_person_per_year = abr;
-                parameters.blackfly.use_density_dependence = true;
-                parameters.blackfly.x1 = 0.00008627075;
-                parameters.blackfly.hbi_lb = 0.1319683;
-                parameters.human.prop_serorevert_fast = 0.8026316;
-                parameters.sequelae_params = get_all_oncho_sequelae_params();
 
+                InputParams input_params_seed;
+                if (!loaded_input_params) {
+                    Params parameters;
+                    parameters.base.seed = true_seed;
+                    parameters.base.k_E = k_E;
+                    parameters.blackfly.bite_rate_per_person_per_year = abr;
+                    parameters.exposure.use_onchosim_exposure = onchosim_exposure;
 
-                std::vector<double> vce_vals = {
-                    0.80, 0.0, 0.0, 0.0, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80,
-                    0.64, 0.48, 0.32, 0.16, 0
-                };
-                std::vector<double> vc_years = {
-                    86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
-                    96, 97, 98, 99, 100
-                };
-                VectorControlParams vcp_ghana = VectorControlParams(
-                    vc_years, 
-                    false,
-                    vce_vals, 
-                    "larviciding"
-                );
-                VectorControlParams vcp_benin = VectorControlParams(
-                    88, 107, 
-                    1, 0.80,
-                    0, "larviciding"
-                );
-
-
-                VectorControlParams vcp_after = VectorControlParams(
-                    127, 127 + additional_treatment_years + 1,
-                    1, 0.80,
-                    0, "slashnclear"
-                );
-
-                std::vector<VectorControlParams> vcps = {vcp_ghana, vcp_after};
-                if (use_benin_int_history) {
-                    vcps = {vcp_benin, vcp_after};
+                    input_params_seed = InputParams(
+                        parameters, 
+                        {}, 
+                        {}
+                    );
+                } else {
+                    Params loaded_parameters = input_params.params;
+                    loaded_parameters.base.seed = true_seed;
+                    input_params_seed = InputParams(
+                        loaded_parameters,
+                        input_params.treatments,
+                        input_params.vector_control
+                    );
                 }
 
-
-                TreatmentParams tp_ghana_1 = TreatmentParams(
-                    87, 106, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.68
-                );
-                TreatmentParams tp_ghana_2 = TreatmentParams(
-                    106, 107, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.702
-                );
-                TreatmentParams tp_ghana_3 = TreatmentParams(
-                    107, 108, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.724
-                );
-                TreatmentParams tp_ghana_4 = TreatmentParams(
-                    108, 109, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.746
-                );
-                TreatmentParams tp_ghana_5 = TreatmentParams(
-                    109, 110, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.768
-                );
-                TreatmentParams tp_ghana_6 = TreatmentParams(
-                    110, 120, 0.5,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.79
-                );
-                TreatmentParams tp_ghana_7 = TreatmentParams(
-                    121, 127, 0.5,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.79
-                );
-                std::vector<TreatmentParams> treatments = {
-                    tp_ghana_1, tp_ghana_2, tp_ghana_3, tp_ghana_4, tp_ghana_5,
-                    tp_ghana_6, tp_ghana_7
-                };
-
-                TreatmentParams tp_benin_1 = TreatmentParams(
-                    96, 103, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.80
-                );
-                TreatmentParams tp_benin_2 = TreatmentParams(
-                    103, 113, 0.5,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.80
-                );
-                TreatmentParams tp_benin_3 = TreatmentParams(
-                    113, 120, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.80
-                );
-                TreatmentParams tp_benin_4 = TreatmentParams(
-                    121, 127, 1,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.80
-                );
-                if (use_benin_int_history) {
-                    treatments = {
-                        tp_benin_1, tp_benin_2, tp_benin_3, tp_benin_4
-                    };
-                }
-
-                TreatmentParams tp_scenario_bIVM = TreatmentParams(
-                    127, 127 + additional_treatment_years, 0.5,
-                    "IVM",
-                    DrugParamsIVM(),
-                    5,
-                    0.2,
-                    0.0,
-                    0.80
-                );
-                TreatmentParams tp_scenario_aMOX = TreatmentParams(
-                    127, 127 + additional_treatment_years, 1.0,
-                    "IVM",
-                    DrugParamsMOX(),
-                    4,
-                    0.2,
-                    0.0,
-                    0.80
-                );
-                TreatmentParams tp_scenario_bMOX = TreatmentParams(
-                    127, 127 + additional_treatment_years, 0.5,
-                    "MOX",
-                    DrugParamsMOX(),
-                    4,
-                    0.2,
-                    0.0,
-                    0.80
-                );
+                const int total_timesteps = (input_params_seed.params.base.year_length_days / input_params_seed.params.base.delta_time_days) * total_years;
                 
-                if (additional_treatment_name == "bIVM") {
-                    treatments.push_back(tp_scenario_bIVM);
-                } else if (additional_treatment_name == "aMOX") {
-                    treatments.push_back(tp_scenario_aMOX);
-                    parameters.base.delta_time_days = 0.5;
-                } else if (additional_treatment_name == "bMOX") {
-                    treatments.push_back(tp_scenario_bMOX);
-                    parameters.base.delta_time_days = 0.5;
-                }
-
-                const int total_timesteps = (parameters.base.year_length_days / parameters.base.delta_time_days) * total_years;
-
-
-                InputParams input_params(
-                    std::move(parameters), 
-                    treatments, 
-                    vcps
-                );
-                Model model(std::move(input_params), enable_timing);
+                Model model(std::move(input_params_seed), enable_timing);
 
 
                 std::vector<ModelOutputOption> all_outputs = {
@@ -400,40 +263,38 @@ int main(int argc, char* argv[]) {
                     ModelOutputOption::worm_load,
                     ModelOutputOption::female_worm_load,
                     ModelOutputOption::male_worm_load,
-                    ModelOutputOption::fertile_female_worm_load,
-                    ModelOutputOption::infertile_female_worm_load,
-                    ModelOutputOption::perm_sterile_female_worm_load,
-                    ModelOutputOption::compliance_percent,
-                    ModelOutputOption::severe_itch_prevalence,
-                    ModelOutputOption::rsd_prevalence,
-                    ModelOutputOption::atrophy_prevalence,
-                    ModelOutputOption::hanging_groin_prevalence,
-                    ModelOutputOption::depigmentation_prevalence,
-                    ModelOutputOption::blindness_prevalence,
-                    ModelOutputOption::visual_impairment_prevalence,
-                    ModelOutputOption::oae_prevalence,
+                    // ModelOutputOption::fertile_female_worm_load,
+                    // ModelOutputOption::infertile_female_worm_load,
+                    // ModelOutputOption::perm_sterile_female_worm_load,
+                    // ModelOutputOption::compliance_percent,
+                    // ModelOutputOption::severe_itch_prevalence,
+                    // ModelOutputOption::rsd_prevalence,
+                    // ModelOutputOption::atrophy_prevalence,
+                    // ModelOutputOption::hanging_groin_prevalence,
+                    // ModelOutputOption::depigmentation_prevalence,
+                    // ModelOutputOption::blindness_prevalence,
+                    // ModelOutputOption::visual_impairment_prevalence,
+                    // ModelOutputOption::oae_prevalence,
                     ModelOutputOption::l3_per_blackfly,
                     ModelOutputOption::l3_prevalence_blackflies
                 };
 
                 std::vector<int> age_starts = {
-                    0, 0, 0, 3, 10, 15, 20, 30, 40, 50, 60, 70
+                    5, 12, 0, 5, 10, 15, 20, 30, 40, 50, 60, 70
                 };
                 std::vector<int> age_ends = {
-                    81, 66, 3, 10, 15, 20, 30, 40, 50, 60, 70, 81
+                    81, 81, 5, 10, 15, 20, 30, 40, 50, 60, 70, 81
                 };
                 std::vector<ModelOutputs> all_model_outputs;
 
                 for (size_t a = 0; a < age_starts.size(); ++a) {
                     double interval = 1.0;
-                    if (age_starts[a] == 0 && age_ends[a] == 81)
-                        interval = 1.0 / 8.0;
                     all_model_outputs.push_back(
                         ModelOutputs(
                             OutputInfo(
-                                total_years, 65.0, interval,
+                                total_years, 50.0, interval,
                                 age_starts[a], age_ends[a],
-                                1900, 0.80, 0.99,
+                                1900, 0.60, 0.969,
                                 all_outputs
                             ),
                             true_seed
@@ -457,12 +318,8 @@ int main(int argc, char* argv[]) {
                 }
 
                 std::ostringstream oss;
-
-                oss << temporary_output_folder << "tmp_output_abr_" << abr << "_kE_" << k_E << "_trt_" << additional_treatment_name << "_yrs_" << additional_treatment_years << "_" << country << "_vc_" << true_seed << ".csv";
-
+                oss << temporary_output_folder << "tmp_output_abr_" << abr << "_kE_" << k_E << "_" << true_seed << ".csv";
                 printf("Writing output to %s\n", oss.str().c_str());
-
-
                 int iter = 0;
                 for (auto& mo : local_outputs) {
                     mo.write(oss.str(), iter > 0);
@@ -471,8 +328,7 @@ int main(int argc, char* argv[]) {
                 printf("Total runtime seed %d: %f\n", true_seed, get_elapsed_time(start));
             }
             exit(0);
-        }
-        else {
+        } else {
             global_pids.push_back(pid);
         }
     }
@@ -496,11 +352,10 @@ int main(int argc, char* argv[]) {
 
     std::string final_output_path = (
         output_folder + "final_output_abr_" + std::to_string((int)abr) +
-        "_kE_" + std::to_string(k_E) + "_trt_" + additional_treatment_name + "_yrs_" + 
-        std::to_string(additional_treatment_years) + "_" + country + "_vc.csv"
+        "_kE_" + std::to_string(k_E) + ".csv"
     );
 
-    merge_output_csvs(temporary_output_folder, final_output_path);
+    merge_output_csvs(temporary_output_folder, final_output_path, delete_temp_after_processing);
 
     return 0;
 }

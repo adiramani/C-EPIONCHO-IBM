@@ -9,7 +9,6 @@
 #include <memory>
 #include <cmath>
 
-// -------------------- Sequelae Parameters --------------------
 struct SequelaeParams {
     SequelaeType sequelae_type;
     SequelaeModelType sequelae_model_type;
@@ -128,7 +127,6 @@ struct OAESequelaeParams : PowerLawProbSequelaeParams {
     {}
 };
 
-// -------------------- Treatment Parameters --------------------
 struct InterventionParams {
     // Inclusive of start time, but not end time
     int start_time = 0;
@@ -327,7 +325,6 @@ struct VectorControlParams: public InterventionParams {
     {}
 };
 
-// -------------------- Worm Parameters --------------------
 struct WormParams {
     double y_w = 0.09953;
     double d_w = 6.00569;
@@ -344,7 +341,6 @@ struct WormParams {
     double l3_delay = 10.0 * 28;  // days, assuming 28 days per month
 };
 
-// -------------------- Blackfly Parameters --------------------
 struct BlackflyParams {
     double delta_h_zero; // = 0.1864987;
     double delta_h_inf; // = 0.002772749;
@@ -393,7 +389,6 @@ struct BlackflyParams {
     }
 };
 
-// -------------------- Microfilaria Parameters --------------------
 struct MicrofilariaeParams {
     double mf_move_rate = 8.13333;
     int mf_age_stages = 21;
@@ -408,7 +403,6 @@ struct MicrofilariaeParams {
     double initial_kmf = 0.313;
 };
 
-// -------------------- Exposure Parameters --------------------
 struct ExposureParams {
     double Q = 1.2;
     double male_exposure_exponent = 0.007;
@@ -420,7 +414,6 @@ struct ExposureParams {
     double onchosim_female_max_exp = 0.7;
 };
 
-// -------------------- Human Parameters --------------------
 struct HumanParams {
     int min_skinsnip_age = 5;
     int max_human_age = 80;
@@ -431,18 +424,15 @@ struct HumanParams {
     double prop_serorevert_fast = 0.5;
 };
 
-// -------------------- Base Parameters --------------------
 struct BaseParams {
     int seed = 0;
     int n_people = 1000;
     double k_E = 0.3;
-    double n_treatments_bin_size = 1.0;
     double delta_time_days = 1.0;
     double year_length_days = 366.0;
     double month_length_days = 28.0;
 };
 
-// -------------------- Top-level Params Struct --------------------
 struct Params {
     BaseParams base;
     WormParams worms;
@@ -454,7 +444,14 @@ struct Params {
 
     Params() = default;
 
-    Params(const Params&) = default;
+    Params(const Params& other)
+    : base(other.base), blackfly(other.blackfly), worms(other.worms),
+      mf(other.mf), exposure(other.exposure), human(other.human)
+    {
+        for (const auto& seq : other.sequelae_params) {
+            sequelae_params.push_back(std::make_unique<SequelaeParams>(*seq));
+        }
+    }
     Params& operator=(const Params&) = default;
 
     Params(Params&&) = default;
@@ -465,6 +462,8 @@ struct InputParams {
     Params params;
     std::vector<TreatmentParams> treatments;
     std::vector<VectorControlParams> vector_control;
+
+    InputParams() = default;
 
     InputParams(
         Params params, 
@@ -479,7 +478,6 @@ struct InputParams {
     }
 };
 
-// --------------- Output Struct ----------------------------
 struct OutputInfo {
     std::vector<ModelOutputOption> outputs_to_track;
     std::vector<double> output_time_years;

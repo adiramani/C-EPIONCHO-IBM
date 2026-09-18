@@ -2,6 +2,7 @@ SRC = $(wildcard epioncho_ibm/*.cpp)
 BIN_DIR ?= .
 BIN_NAME ?= c-epioncho-ibm
 BIN = $(BIN_DIR)/$(BIN_NAME)
+LDFFLAGS = ""
 
 OSNAME := $(shell uname -s)
 
@@ -13,8 +14,9 @@ endif
 
 ifeq ($(PLATFORM),macos)
     CXX = /opt/homebrew/opt/llvm/bin/clang++
-    CXXFLAGS = -std=c++17 -O3 -march=native -fopenmp -isysroot $(shell xcrun --show-sdk-path)
-    DEBUG_FLAGS = -std=c++17 -g -Wall -Wextra -fopenmp -isysroot $(shell xcrun --show-sdk-path)
+    CXXFLAGS = -std=c++17 -O3 -march=native -fopenmp -isysroot $(shell xcrun --show-sdk-path) -flto=auto -Ivendor
+    LDFFLAGS = "-L/opt/homebrew/opt/llvm/lib"
+    DEBUG_FLAGS = -std=c++17 -g -pg -Wall -Wextra -fopenmp -isysroot $(shell xcrun --show-sdk-path)
 endif
 
 ifeq ($(PLATFORM),linux)
@@ -32,7 +34,7 @@ ifeq ($(PLATFORM),linux)
         MARCH_FLAG = -march=native
     endif
 
-    CXXFLAGS = -std=c++17 -O3 $(MARCH_FLAG) -fopenmp -flto=auto
+    CXXFLAGS = -std=c++17 -O3 $(MARCH_FLAG) -fopenmp -flto=auto -Ivendor
     DEBUG_FLAGS = -std=c++17 -g -Wall -Wextra -fopenmp
 
 	GCC_MODULE := GCC/15.2.0
@@ -46,7 +48,7 @@ all: $(BIN)
 
 $(BIN): $(SRC)
 	mkdir -p $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ -o $@
+	$(CXX) $(LDFFLAGS) $(CXXFLAGS) $^ -o $@
 
 debug:
 	mkdir -p $(BIN_DIR)

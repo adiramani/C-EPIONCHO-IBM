@@ -1,0 +1,51 @@
+{
+    "base": {
+        "seed": 1,
+        "n_people": 1000,
+        "k_E": 0.3,
+        "delta_time_days": 0.5
+    },
+    "human": {
+        "prop_serorevert_fast": 0.25
+    },
+    "exposure": {
+        "use_onchosim_exposure": false
+    },
+    "mf": {
+        "use_kmf_const": false
+    },
+    "blackfly": {
+        "bite_rate_per_person_per_year": 1000
+    },
+    "treatments": [
+        {
+            "name": "IVM",
+            "start_year": 87,
+            "end_year": 120,
+            "interval_years": 1,
+            "coverage": 0.68,
+            "rho": 0.2,
+            "drugs": [{"name": "IVM"}]
+        },
+        {
+            "name": "MOX",
+            "start_year": 121,
+            "end_year": 127,
+            "interval_years": 0.5,
+            "coverage": 0.79,
+            "rho": 0.2,
+            "drugs": [{"name": "MOX"}]
+        }
+    ],
+    "vector_control": [
+        {
+            "name": "larviciding",
+            "application_years": [
+                86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100
+            ],
+            "efficacies": [
+                0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.64, 0.48, 0.32, 0.16, 0
+            ]
+        }
+    ]
+}
