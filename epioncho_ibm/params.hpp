@@ -304,9 +304,14 @@ struct VectorControlParams: public InterventionParams {
       efficacies(efficacy)
     {
         if (efficacies.size() != application_times.size()) {
-            throw std::invalid_argument(
-                "Efficacy size must match application_times size."
-            );
+            if (efficacies.size() == 1) {
+                for (std::size_t t = 0; t < application_times.size(); ++t)
+                    efficacies.push_back(efficacies[0]);
+            } else {
+                throw std::invalid_argument(
+                    "Efficacy size must match application_times size."
+                );
+            }
         }
     }
 
@@ -322,7 +327,18 @@ struct VectorControlParams: public InterventionParams {
         intervention_name, InterventionType::VectorControl
       ),
       efficacies(efficacy)
-    {}
+    {
+        if (efficacies.size() != application_times.size()) {
+            if (efficacies.size() == 1) {
+                for (std::size_t t = 0; t < application_times.size(); ++t)
+                    efficacies.push_back(efficacies[0]);
+            } else {
+                throw std::invalid_argument(
+                    "Efficacy size must match application_times size."
+                );
+            }
+        }
+    }
 };
 
 struct WormParams {
@@ -372,7 +388,7 @@ struct BlackflyParams {
             return;
         }
         if (!use_density_dependence) {
-            c_h = 0; delta_h_inf = 0.186; delta_h_zero = 0.186;
+            c_h = 0; delta_h_inf = 0.003; delta_h_zero = 0.003;
             return;
         }
         if(k_E == 0.2) {

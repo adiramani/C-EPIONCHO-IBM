@@ -284,7 +284,7 @@ std::vector<VectorControlParams> parse_vector_control_from_json(const json& vc_j
                     throw std::invalid_argument("application_years cannot be empty for vector control '" + name + "'");
                 }
 
-                if (application_years.size() != efficacies.size()) {
+                if (efficacies.size() != 1 && application_years.size() != efficacies.size()) {
                     throw std::invalid_argument(
                         "application_years and efficacies must have the same length for vector control '" + name + "'"
                     );
@@ -409,7 +409,7 @@ public:
             if (base_json.contains("k_E")) {
                 params.base.k_E = base_json["k_E"].get<double>();
                 std::vector<double> valid_ke = {0.2, 0.3, 0.4};
-                Validator::validate_in_array(params.base.k_E, valid_ke, "kE");
+                // Validator::validate_in_array(params.base.k_E, valid_ke, "kE");
             }
             if (base_json.contains("delta_time_days")) {
                 params.base.delta_time_days = base_json["delta_time_days"].get<double>();
@@ -460,7 +460,8 @@ public:
             }
             if (bf_json.contains("x1")) {
                 params.blackfly.x1 = bf_json["x1"].get<double>();
-                Validator::validate_positive(params.blackfly.x1, "x1");
+                if (params.blackfly.x1 != -1)
+                    Validator::validate_positive(params.blackfly.x1, "x1");
             }
             if (bf_json.contains("hbi_lb")) {
                 params.blackfly.hbi_lb = bf_json["hbi_lb"].get<double>();
