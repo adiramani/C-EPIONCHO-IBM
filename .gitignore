@@ -1,2 +1,5 @@
 *.csv
 *_old/
+output_data/*
+web_ui/node_modules/
+web_ui/build/
