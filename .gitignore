@@ -5,6 +5,7 @@ web_ui/node_modules/
 web_ui/build/
 web_ui/coverage
 backend/node_modules/
+backend/tmp_configs/
 
 
 

@@ -11,9 +11,9 @@ app.use(cors());
 app.post('/api/run-model', (req, res) => {
   const config = req.body;
   
-  fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
+  fs.writeFileSync('tmp_configs/config.json', JSON.stringify(config, null, 2));
   
-  const model = spawn('../c-epioncho-ibm', ['--config', 'config.json', '--output-folder', '../model_output/']);
+  const model = spawn('../c-epioncho-ibm', ['--config', 'tmp_configs/config.json', '--output-folder', '../model_output/']);
   let output = '';
   
   model.stdout.on('data', (data) => {
